@@ -1,0 +1,18 @@
+student-teacher-portal/
+├── backend/
+│   ├── config/          # Database connections (db.js)
+│   ├── controllers/     # Route logic (authController.js, studentController.js)
+│   ├── models/          # Mongoose schemas (User.js, Course.js, Attendance.js)
+│   ├── routes/          # Express route paths (authRoutes.js)
+│   └── server.js        # Entry point
+└── frontend/            # React application
+
+frontend/src/
+├── components/      # Reusable UI parts (Navbar, Sidebar)
+├── context/         # To store the JWT token globally (AuthContext)
+├── pages/           # The main screens
+│   ├── Login.jsx
+│   ├── StudentDashboard.jsx
+│   └── TeacherDashboard.jsx
+├── App.jsx          # Where we set up react-router-dom
+└── main.jsx
