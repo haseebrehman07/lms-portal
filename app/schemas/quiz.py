@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -24,6 +24,15 @@ class QuizQuestionCreate(BaseModel):
         if v < 0 or v > 3:
             raise ValueError("correct_option must be 0, 1, 2, or 3")
         return v
+
+    @model_validator(mode="after")
+    def correct_option_within_options(self):
+        if self.correct_option >= len(self.options):
+            raise ValueError(
+                f"correct_option ({self.correct_option}) is out of range "
+                f"for {len(self.options)} option(s) provided"
+            )
+        return self
 
 
 class QuizCreate(BaseModel):

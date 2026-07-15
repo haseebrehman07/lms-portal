@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -42,3 +42,20 @@ class EnrollmentDetailResponse(BaseModel):
     lesson_progress: List[LessonProgressResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class BulkEnrollRequest(BaseModel):
+    user_ids: List[UUID]
+
+    @field_validator("user_ids")
+    @classmethod
+    def must_have_users(cls, v: List[UUID]) -> List[UUID]:
+        if not v:
+            raise ValueError("Provide at least one user_id")
+        return v
+
+
+class BulkEnrollResult(BaseModel):
+    enrolled: List[UUID]
+    already_enrolled: List[UUID]
+    invalid_user_ids: List[UUID]

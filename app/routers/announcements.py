@@ -16,13 +16,11 @@ router = APIRouter(prefix="/announcements", tags=["Announcements"])
 
 @router.get("", response_model=List[AnnouncementResponse])
 def get_announcements(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     return db.query(Announcement).order_by(
         Announcement.created_at.desc()
     ).all()
-
 
 @router.post(
     "",

@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -15,13 +16,16 @@ from app.routers import auth
 from app.routers import categories
 from app.routers import courses
 from app.routers import lessons
+from app.routers import Module
 from app.routers import enrollments
 from app.routers import dashboard
 from app.routers import users
 from app.routers import reports
 from app.routers import announcements
 from app.routers import quizzes
+from app.routers import assignments
 from app.routers import certificates
+from app.routers import upload
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +67,8 @@ allowed_origins = (
     else ["https://yourdomain.com"]
 )
 
+app.mount("/media", StaticFiles(directory="uploads"), name="media")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -88,13 +94,16 @@ app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(courses.router)
 app.include_router(lessons.router)
+app.include_router(Module.router)
 app.include_router(enrollments.router)
 app.include_router(dashboard.router)
 app.include_router(users.router)
 app.include_router(reports.router)
 app.include_router(announcements.router)
 app.include_router(quizzes.router)
+app.include_router(assignments.router)
 app.include_router(certificates.router)
+#app.include_router(uploads.router)
 
 
 @app.get("/health", tags=["Health"])

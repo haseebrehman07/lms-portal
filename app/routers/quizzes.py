@@ -4,6 +4,8 @@ from uuid import UUID
 from app.database import get_db
 from app.models.quiz import Quiz, QuizQuestion, QuizAttempt
 from app.models.lesson import Lesson
+from app.models.enrollment import Enrollment
+from app.models.user import RoleEnum
 from app.schemas.quiz import (
     QuizCreate,
     QuizResponse,
@@ -11,6 +13,7 @@ from app.schemas.quiz import (
     QuizAttemptResponse
 )
 from app.core.deps import get_current_user, require_admin
+from app.services.progress import mark_lesson_progress_complete
 
 router = APIRouter(tags=["Quizzes"])
 
@@ -73,6 +76,24 @@ def get_quiz(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lesson not found"
+        )
+
+    if current_user.role not in (RoleEnum.admin, RoleEnum.manager):
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.user_id == current_user.id,
+            Enrollment.course_id == lesson.course_id
+        ).first()
+        if not enrollment:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not enrolled in this course"
+            )
+
     quiz = db.query(Quiz).filter(
         Quiz.lesson_id == lesson_id
     ).first()
@@ -102,6 +123,17 @@ def submit_quiz_attempt(
             detail="Quiz not found"
         )
 
+    lesson = quiz.lesson
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == lesson.course_id
+    ).first()
+    if not enrollment:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not enrolled in this course"
+        )
+
     questions = db.query(QuizQuestion).filter(
         QuizQuestion.quiz_id == quiz_id
     ).all()
@@ -112,8 +144,7 @@ def submit_quiz_attempt(
             detail="Quiz has no questions"
         )
 
-    # score entirely on server side
-    # never trust client to calculate score
+    # score entirely on server side - never trust client to calculate score
     correct_count = 0
     for question in questions:
         submitted_answer = payload.answers.get(str(question.id))
@@ -133,4 +164,8 @@ def submit_quiz_attempt(
     db.add(attempt)
     db.commit()
     db.refresh(attempt)
+
+    if passed:
+        mark_lesson_progress_complete(enrollment.id, lesson.id, db)
+
     return attempt

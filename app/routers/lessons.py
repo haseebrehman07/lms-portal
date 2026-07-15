@@ -4,6 +4,7 @@ from typing import List
 from uuid import UUID
 from app.database import get_db
 from app.models.lesson import Lesson
+from app.models.Module import Module
 from app.models.course import Course
 from app.schemas.lesson import LessonCreate, LessonUpdate, LessonResponse
 from app.core.deps import require_admin
@@ -57,6 +58,17 @@ def create_lesson(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found"
         )
+
+    module = db.query(Module).filter(
+        Module.id == payload.module_id,
+        Module.course_id == course_id
+    ).first()
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="module_id does not belong to this course"
+        )
+
     lesson = Lesson(
         **payload.model_dump(),
         course_id=course_id
@@ -84,7 +96,20 @@ def update_lesson(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found"
         )
+
     update_data = payload.model_dump(exclude_unset=True)
+
+    if "module_id" in update_data:
+        module = db.query(Module).filter(
+            Module.id == update_data["module_id"],
+            Module.course_id == lesson.course_id
+        ).first()
+        if not module:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="module_id does not belong to this lesson's course"
+            )
+
     for field, value in update_data.items():
         setattr(lesson, field, value)
     db.commit()

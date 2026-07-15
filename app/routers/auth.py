@@ -1,7 +1,9 @@
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from jose import JWTError
 from slowapi import Limiter
@@ -11,7 +13,6 @@ from app.database import get_db
 from app.models.user import User
 from app.models.token_blacklist import TokenBlacklist
 from app.schemas.auth import (
-    RegisterRequest,
     LoginRequest,
     TokenResponse,
     RefreshRequest,
@@ -21,50 +22,28 @@ from app.schemas.auth import (
 )
 from app.core.security import (
     hash_password,
-    verify_password,
+    verify_password_constant_time,
     create_access_token,
     create_refresh_token,
     decode_token
 )
 from app.core.deps import get_current_user
+from app.services.email import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 limiter = Limiter(key_func=get_remote_address)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
 
-@router.post(
-    "/register",
-    response_model=TokenResponse,
-    status_code=status.HTTP_201_CREATED
-)
-@limiter.limit("5/minute")
-def register(
-    request: Request,
-    payload: RegisterRequest,
-    db: Session = Depends(get_db)
-):
-    existing = db.query(User).filter(
-        User.email == payload.email.lower().strip()
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    user = User(
-        name=payload.name,
-        email=payload.email.lower().strip(),
-        password_hash=hash_password(payload.password),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    token_data = {"sub": str(user.id), "role": user.role.value}
-    return TokenResponse(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data)
-    )
+# NOTE: Public self-registration has been intentionally removed.
+# Accounts are created by an admin (see POST /users), which sends the
+# new user an invite email so they set their own password.
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -77,16 +56,47 @@ def login(
     user = db.query(User).filter(
         User.email == payload.email.lower().strip()
     ).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+
+    if user and user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account temporarily locked due to repeated failed login attempts. Try again later."
+        )
+
+    # Always run a real password verification, even if the account doesn't
+    # exist - keeps response timing constant so an attacker can't tell
+    # real emails apart from fake ones by measuring response speed.
+    password_valid = verify_password_constant_time(
+        payload.password,
+        user.password_hash if user else None
+    )
+
+    if not user or not password_valid:
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_MINUTES)
+            db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
+
     if not user.is_active:
+        if user.password_reset_token:
+            detail = "Please check your email to activate your account first."
+        else:
+            detail = "Account is deactivated. Contact your administrator."
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated. Contact your administrator."
+            detail=detail
         )
+
+    # Successful login - clear any failed-attempt tracking
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    db.commit()
+
     token_data = {"sub": str(user.id), "role": user.role.value}
     return TokenResponse(
         access_token=create_access_token(token_data),
@@ -113,12 +123,25 @@ def refresh(
     except JWTError:
         raise credentials_exception
 
+    blacklisted = db.query(TokenBlacklist).filter(
+        TokenBlacklist.token == payload.refresh_token
+    ).first()
+    if blacklisted:
+        raise credentials_exception
+
     user = db.query(User).filter(
         User.id == user_id,
         User.is_active == True  # noqa
     ).first()
     if not user:
         raise credentials_exception
+
+    # Same password-change invalidation as access tokens
+    token_iat = decoded.get("iat")
+    if token_iat and user.password_changed_at:
+        issued_at = datetime.fromtimestamp(token_iat, tz=timezone.utc)
+        if issued_at < user.password_changed_at:
+            raise credentials_exception
 
     token_data = {"sub": str(user.id), "role": user.role.value}
     return TokenResponse(
@@ -134,13 +157,14 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout(
+    payload: Optional[LogoutRequest] = None,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        payload = decode_token(token)
-        exp = payload.get("exp")
+        access_payload = decode_token(token)
+        exp = access_payload.get("exp")
         expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
     except JWTError:
         raise HTTPException(
@@ -151,20 +175,34 @@ def logout(
     already_blacklisted = db.query(TokenBlacklist).filter(
         TokenBlacklist.token == token
     ).first()
-
     if not already_blacklisted:
-        blacklisted_token = TokenBlacklist(
-            token=token,
-            expires_at=expires_at
-        )
-        db.add(blacklisted_token)
+        db.add(TokenBlacklist(token=token, expires_at=expires_at))
         db.commit()
+
+    # Also blacklist the refresh token if the client sends it - otherwise
+    # a leaked refresh token would keep working after "logout" for up to
+    # its full lifetime (days), not just until the access token expires.
+    if payload and payload.refresh_token:
+        try:
+            refresh_payload = decode_token(payload.refresh_token)
+            refresh_exp = refresh_payload.get("exp")
+            refresh_expires_at = datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
+            already = db.query(TokenBlacklist).filter(
+                TokenBlacklist.token == payload.refresh_token
+            ).first()
+            if not already:
+                db.add(TokenBlacklist(token=payload.refresh_token, expires_at=refresh_expires_at))
+                db.commit()
+        except JWTError:
+            pass  # already invalid/expired, nothing to blacklist
 
     return {"message": "Successfully logged out"}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-async def forgot_password(
+@limiter.limit("5/minute")
+def forgot_password(
+    request: Request,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -176,18 +214,24 @@ async def forgot_password(
     if user:
         token = secrets.token_urlsafe(32)
         user.password_reset_token = token
-        user.password_reset_expires = (
-            datetime.utcnow() + timedelta(hours=1)
-        )
+        user.password_reset_expires = datetime.now(timezone.utc) + timedelta(hours=1)
         db.commit()
 
+        background_tasks.add_task(
+            send_password_reset_email, user.email, user.name, token
+        )
+
+    # Same message whether or not the email exists - never reveal
+    # which emails are registered.
     return {
         "message": "If that email exists you will receive a reset link shortly"
     }
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def reset_password(
+    request: Request,
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
@@ -201,7 +245,7 @@ def reset_password(
             detail="Invalid or expired reset token"
         )
 
-    if user.password_reset_expires < datetime.utcnow():
+    if not user.password_reset_expires or user.password_reset_expires < datetime.now(timezone.utc):
         user.password_reset_token = None
         user.password_reset_expires = None
         db.commit()
@@ -210,9 +254,18 @@ def reset_password(
             detail="Reset token has expired"
         )
 
+    now = datetime.now(timezone.utc)
     user.password_hash = hash_password(payload.new_password)
     user.password_reset_token = None
     user.password_reset_expires = None
+    # This endpoint also completes account activation for invited users -
+    # accepting an invite link IS setting your password for the first time.
+    user.is_active = True
+    # Invalidates every token issued before right now - closes any
+    # session that might have been hijacked before the reset.
+    user.password_changed_at = now
+    user.failed_login_attempts = 0
+    user.locked_until = None
     db.commit()
 
     return {"message": "Password reset successful"}

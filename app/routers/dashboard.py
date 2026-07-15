@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 from sqlalchemy import func, desc
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import get_db
 from app.models.user import User
 from app.models.course import Course
-from app.models.enrollment import Enrollment, EnrollmentStatusEnum
-from app.core.deps import require_manager_or_admin
+from app.models.enrollment import Enrollment, EnrollmentStatusEnum, LessonProgress
+from app.models.certificate import Certificate
+from app.core.deps import require_manager_or_admin, get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -20,7 +21,7 @@ def get_dashboard_stats(
         User.is_active == True  # noqa
     ).count()
 
-    month_start = datetime.utcnow().replace(
+    month_start = datetime.now(timezone.utc).replace(
         day=1, hour=0, minute=0, second=0, microsecond=0
     )
     new_users_this_month = db.query(User).filter(
@@ -46,12 +47,15 @@ def get_dashboard_stats(
         Enrollment.status == EnrollmentStatusEnum.not_started
     ).count()
 
+    certificates_issued = db.query(Certificate).count()
+
     completion_percent = (
         round((completed / total_enrollments) * 100, 1)
         if total_enrollments > 0 else 0
     )
 
     return {
+        # original field names - kept for any other existing consumer
         "total_users": total_users,
         "new_users_this_month": new_users_this_month,
         "total_courses": total_courses,
@@ -69,7 +73,11 @@ def get_dashboard_stats(
             "not_started_percent": round(
                 (not_started / total_enrollments) * 100, 1
             ) if total_enrollments > 0 else 0,
-        }
+        },
+        # fields the admin dashboard cards (CourseAllocationTab.jsx) expect
+        "total_students": total_users,
+        "total_enrollments": total_enrollments,
+        "certificates_issued": certificates_issued
     }
 
 
@@ -82,6 +90,10 @@ def get_recent_enrollments(
         db.query(Enrollment)
         .join(User, Enrollment.user_id == User.id)
         .join(Course, Enrollment.course_id == Course.id)
+        .options(
+            contains_eager(Enrollment.user),
+            contains_eager(Enrollment.course)
+        )
         .order_by(desc(Enrollment.enrolled_at))
         .limit(5)
         .all()
@@ -95,7 +107,11 @@ def get_recent_enrollments(
             "course_title": e.course.title,
             "status": e.status.value,
             "progress_percent": e.progress_percent,
-            "enrolled_at": e.enrolled_at.isoformat()
+            "enrolled_at": e.enrolled_at.isoformat(),
+            # fields CourseAllocationTab.jsx expects
+            "student_name": e.user.name,
+            "course_name": e.course.title,
+            "date": e.enrolled_at.isoformat()
         }
         for e in enrollments
     ]
@@ -125,7 +141,10 @@ def get_top_courses(
             "course_id": str(r.id),
             "title": r.title,
             "enrolled_count": r.enrolled_count or 0,
-            "avg_progress": round(float(r.avg_progress or 0), 1)
+            "avg_progress": round(float(r.avg_progress or 0), 1),
+            # fields CourseAllocationTab.jsx expects
+            "id": str(r.id),
+            "enrollments": r.enrolled_count or 0
         }
         for r in results
     ]
@@ -153,3 +172,29 @@ def get_upcoming_trainings(
         }
         for c in courses
     ]
+
+
+@router.get("/learning-hours")
+def get_learning_hours(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    result = db.query(
+        func.sum(LessonProgress.time_spent_seconds)
+    ).join(
+        Enrollment,
+        LessonProgress.enrollment_id == Enrollment.id
+    ).filter(
+        Enrollment.user_id == current_user.id
+    ).scalar()
+
+    total_seconds = result or 0
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+
+    return {
+        "total_seconds": total_seconds,
+        "hours": hours,
+        "minutes": minutes,
+        "formatted": f"{hours}h {minutes}m"
+    }

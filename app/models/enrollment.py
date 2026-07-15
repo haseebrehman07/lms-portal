@@ -7,7 +7,8 @@ from sqlalchemy import (
     Integer,
     DateTime,
     Enum as SAEnum,
-    ForeignKey
+    ForeignKey,
+    UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -23,6 +24,9 @@ class EnrollmentStatusEnum(str, enum.Enum):
 
 class Enrollment(Base):
     __tablename__ = "enrollments"
+    __table_args__ = (
+        UniqueConstraint("user_id", "course_id", name="uq_enrollment_per_user_course"),
+    )
 
     id = Column(
         UUID(as_uuid=True),
@@ -72,6 +76,9 @@ class Enrollment(Base):
 
 class LessonProgress(Base):
     __tablename__ = "lesson_progress"
+    __table_args__ = (
+        UniqueConstraint("enrollment_id", "lesson_id", name="uq_progress_per_enrollment_lesson"),
+    )
 
     id = Column(
         UUID(as_uuid=True),

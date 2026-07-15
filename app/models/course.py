@@ -46,6 +46,7 @@ class Course(Base):
         SAEnum(CourseTypeEnum, name="coursetypeenum"),
         nullable=True
     )
+    instructor_name = Column(String(200), nullable=True)
     total_lessons = Column(Integer, default=0, nullable=False)
     is_published = Column(Boolean, default=False, nullable=False)
     created_by = Column(
@@ -68,6 +69,12 @@ class Course(Base):
     creator = relationship(
         "User",
         foreign_keys=[created_by]
+    )
+    modules = relationship(
+        "Module",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="Module.order_index"
     )
     lessons = relationship(
         "Lesson",

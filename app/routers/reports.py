@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
-from datetime import datetime
+from sqlalchemy.orm import Session, contains_eager
+from sqlalchemy import func, extract, case
+from datetime import datetime, timezone
 import csv
 import io
 from app.database import get_db
@@ -58,28 +58,20 @@ def get_completions_by_department(
     results = (
         db.query(
             User.department,
-            func.count(Enrollment.id).label("total"),
-            func.sum(
-                func.cast(
-                    Enrollment.status == EnrollmentStatusEnum.completed,
-                    db.bind.dialect.name == "postgresql"
-                    and __import__("sqlalchemy").Integer
-                    or __import__("sqlalchemy").Integer
-                )
-            ).label("completed")
+            func.count(Enrollment.id).label("total")
         )
         .join(User, Enrollment.user_id == User.id)
         .group_by(User.department)
         .all()
     )
 
-    total_completions = sum(r.total for r in results) or 1
+    total = sum(r.total for r in results) or 1
 
     return [
         {
             "department": r.department or "Unassigned",
             "total": r.total,
-            "percentage": round((r.total / total_completions) * 100, 1)
+            "percentage": round((r.total / total) * 100, 1)
         }
         for r in results
     ]
@@ -96,22 +88,13 @@ def get_course_performance(
             Course.title,
             func.count(Enrollment.id).label("enrolled"),
             func.sum(
-                func.cast(
-                    Enrollment.status == EnrollmentStatusEnum.completed,
-                    __import__("sqlalchemy").Integer
-                )
+                case((Enrollment.status == EnrollmentStatusEnum.completed, 1), else_=0)
             ).label("completed"),
             func.sum(
-                func.cast(
-                    Enrollment.status == EnrollmentStatusEnum.in_progress,
-                    __import__("sqlalchemy").Integer
-                )
+                case((Enrollment.status == EnrollmentStatusEnum.in_progress, 1), else_=0)
             ).label("in_progress"),
             func.sum(
-                func.cast(
-                    Enrollment.status == EnrollmentStatusEnum.not_started,
-                    __import__("sqlalchemy").Integer
-                )
+                case((Enrollment.status == EnrollmentStatusEnum.not_started, 1), else_=0)
             ).label("not_started"),
             func.avg(Enrollment.progress_percent).label("avg_progress")
         )
@@ -143,6 +126,10 @@ def export_report_csv(
         db.query(Enrollment)
         .join(User, Enrollment.user_id == User.id)
         .join(Course, Enrollment.course_id == Course.id)
+        .options(
+            contains_eager(Enrollment.user),
+            contains_eager(Enrollment.course)
+        )
         .all()
     )
 
@@ -177,6 +164,6 @@ def export_report_csv(
         io.BytesIO(output.getvalue().encode()),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=lms_report_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+            "Content-Disposition": f"attachment; filename=lms_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
         }
     )
