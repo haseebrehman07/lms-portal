@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     first_admin_email: str = ""
     first_admin_password: str = ""
     first_admin_name: str = "Admin"
+    r2_account_id: str = ""
+    r2_access_key: str = ""
+    r2_secret_key: str = ""
+    r2_bucket_name: str = ""
+    r2_public_url: str = ""
     mail_port: int = 587
     mail_server: str = "smtp.gmail.com"
     frontend_url: str = "http://localhost:5173"
