@@ -48,7 +48,7 @@ class User(Base):
     # False until the user accepts their invite / sets their own password.
     # Admin-created accounts start as False; self-registration (if ever
     # re-enabled) would start as True.
-    password_reset_token = Column(String(100), nullable=True, index=True)
+    password_reset_token = Column(String(255), nullable=True, index=True)
     password_reset_expires = Column(DateTime(timezone=True), nullable=True)
     # Set every time the password actually changes. Any JWT issued before
     # this timestamp is treated as invalid, even if it hasn't expired yet -

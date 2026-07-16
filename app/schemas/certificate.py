@@ -8,6 +8,7 @@ class CertificateResponse(BaseModel):
     id: UUID
     user_id: UUID
     course_id: UUID
+    course_title: Optional[str] = None
     certificate_url: Optional[str]
     issued_at: datetime
 

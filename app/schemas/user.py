@@ -8,6 +8,7 @@ from app.models.user import RoleEnum
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     department: Optional[str] = None
+    phone: Optional[str] = None
     avatar_url: Optional[str] = None
 
 
@@ -15,12 +16,14 @@ class AdminUserUpdate(BaseModel):
     role: Optional[RoleEnum] = None
     is_active: Optional[bool] = None
     department: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class UserListResponse(BaseModel):
     id: UUID
     name: str
     email: str
+    phone: Optional[str] = None
     role: RoleEnum
     department: Optional[str]
     is_active: bool

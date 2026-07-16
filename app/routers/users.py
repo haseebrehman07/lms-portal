@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.schemas.user import UserListResponse, AdminUserUpdate, UserUpdate
 from app.schemas.enrollment import EnrollmentResponse
 from app.core.deps import require_admin, get_current_user
 from app.core.security import hash_password
+from app.services.email import send_invite_email
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -24,6 +26,7 @@ class AdminCreateUser(BaseModel):
     email: EmailStr
     role: RoleEnum = RoleEnum.learner
     department: Optional[str] = None
+    phone: Optional[str] = None
 
     @field_validator("name")
     @classmethod
@@ -84,46 +87,80 @@ def update_my_profile(
     response_model=UserListResponse,
     status_code=status.HTTP_201_CREATED
 )
-async def create_user(
+def create_user(
     payload: AdminCreateUser,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin=Depends(require_admin)
 ):
-    existing = db.query(User).filter(
-        User.email == payload.email.lower().strip()
-    ).first()
+    """
+    Admin creates a new account. No usable password is set here - the
+    user receives an invite email with a real, database-backed token and
+    sets their own password. The account stays inactive until they do.
+    """
+    email = payload.email.lower().strip()
+    existing = db.query(User).filter(User.email == email).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
 
-    temp_password = secrets.token_urlsafe(12)
+    invite_token = secrets.token_urlsafe(32)
 
     user = User(
         name=payload.name,
-        email=payload.email.lower().strip(),
-        password_hash=hash_password(temp_password),
+        email=email,
+        # Unusable placeholder - real password is set via the invite link.
+        # is_active=False blocks login until then regardless.
+        password_hash=hash_password(secrets.token_urlsafe(32)),
         role=payload.role,
-        department=payload.department
+        department=payload.department,
+        phone=payload.phone,
+        is_active=False,
+        password_reset_token=invite_token,
+        password_reset_expires=datetime.now(timezone.utc) + timedelta(days=7)
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    try:
-        from app.services.email import send_invite_email
-        background_tasks.add_task(
-            send_invite_email,
-            user.email,
-            user.name,
-            temp_password
-        )
-    except Exception:
-        pass
+    background_tasks.add_task(
+        send_invite_email, user.email, user.name, invite_token
+    )
 
     return user
+
+
+@router.post("/{user_id}/resend-invite", status_code=status.HTTP_200_OK)
+def resend_invite(
+    user_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin)
+):
+    """Admin fallback: re-send a fresh invite to a user who never activated."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    if user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User has already activated their account"
+        )
+
+    invite_token = secrets.token_urlsafe(32)
+    user.password_reset_token = invite_token
+    user.password_reset_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    db.commit()
+
+    background_tasks.add_task(
+        send_invite_email, user.email, user.name, invite_token
+    )
+    return {"message": "Invite resent"}
 
 
 @router.post("/{user_id}/enroll", response_model=EnrollmentResponse)
