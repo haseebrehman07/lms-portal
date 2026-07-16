@@ -94,7 +94,7 @@ const AdminCoursesTab = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      setFormData({ ...formData, thumbnailUrl: `http://localhost:8000${res.data.url}` });
+      setFormData({ ...formData, thumbnailUrl: res.data.url });
       setRawImage(null); 
     } catch (error) {
       console.error('Upload failed', error);
