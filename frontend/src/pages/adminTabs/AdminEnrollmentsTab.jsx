@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axiosConfig';
-import { Check, X, Upload, Download, Users, ChevronDown, FileText, BookOpen } from 'lucide-react';
+import { Check, X, Upload, Download, Users, ChevronDown, FileText, BookOpen, Bell } from 'lucide-react';
 
 const AdminEnrollmentsTab = () => {
   const [enrollments, setEnrollments] = useState([]);
@@ -15,6 +15,9 @@ const AdminEnrollmentsTab = () => {
   const [importFile, setImportFile] = useState(null);
   const [importSessionName, setImportSessionName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Incoming Requests UI State
+  const [actionedRequests, setActionedRequests] = useState({});
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -43,13 +46,11 @@ const AdminEnrollmentsTab = () => {
 
       const detailedEnrollments = enrollmentsData.map(enr => {
         const matchedUser = usersData.find(u => u.id === enr.user_id);
-        
-        // Spread matched user first so ANY extra dynamic columns from DB are included
         return {
           studentName: matchedUser ? (matchedUser.name || matchedUser.email) : `ID: ${enr.user_id.slice(0, 8)}...`,
           department: matchedUser?.department || 'N/A',
           ...matchedUser, 
-          ...enr, // Spread enrollment over it so status/progress take precedence
+          ...enr, 
         };
       });
 
@@ -65,7 +66,35 @@ const AdminEnrollmentsTab = () => {
     fetchData();
   }, []);
 
-  // RESTORED: Fixed syntax error where this got overwritten
+  // Helper to get Course Name
+  const getCourseTitle = (courseId) => {
+    const course = courses.find(c => c.id === courseId);
+    return course ? course.title : 'Unknown Course';
+  };
+
+  // --- INCOMING ENROLLMENTS LOGIC ---
+  const handleIncomingAction = async (enrollmentId, action) => {
+    // 1. Optimistic UI update: Instantly turns the button into a bubble
+    setActionedRequests(prev => ({ ...prev, [enrollmentId]: action }));
+
+    // 2. API Call: Leaves the route open for your backend teammate to catch
+    try {
+      const route = action === 'accepted' ? 'approve' : 'reject';
+      await api.patch(`/enrollments/${enrollmentId}/${route}`);
+      // Silently refresh data in the background
+      fetchData(); 
+    } catch (error) {
+      console.error(`Failed to ${action} enrollment:`, error);
+      // Revert the bubble if the backend explicitly fails
+      setActionedRequests(prev => {
+        const newState = { ...prev };
+        delete newState[enrollmentId];
+        return newState;
+      });
+      alert(`Backend failed to process the ${action} request.`);
+    }
+  };
+
   const handleStatusUpdate = async (enrollmentId, newStatus) => {
     try {
       if (newStatus === 'approved') {
@@ -89,18 +118,13 @@ const AdminEnrollmentsTab = () => {
     formData.append('session_name', importSessionName.trim());
 
     try {
-      // 1. Uses 'api' so your Admin Token is automatically attached!
-      // 2. Explicitly override the JSON default to 'multipart/form-data'
       await api.post(`/courses/${selectedCourseId}/import-csv`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
       setIsImportModalOpen(false);
       setImportFile(null);
       setImportSessionName('');
-      await fetchData(); // Refresh the tables
+      await fetchData(); 
     } catch (error) {
       console.error("Import failed:", error);
       alert(error.response?.data?.detail || "Failed to import CSV.");
@@ -129,7 +153,13 @@ const AdminEnrollmentsTab = () => {
     }
   };
 
-  // --- DATA GROUPING ---
+  // --- DATA FILTERING & GROUPING ---
+  
+  // 1. Pending Requests Filter
+  // Keeps the row visible if it's currently pending OR if it was just actioned locally
+  const pendingRequests = enrollments.filter(e => e.status === 'pending' || actionedRequests[e.id]);
+
+  // 2. Session Grouping
   const courseEnrollments = enrollments.filter(e => e.course_id === selectedCourseId);
   const groupedEnrollments = courseEnrollments.reduce((acc, curr) => {
     const session = curr.session_name || 'Independent Learners';
@@ -138,26 +168,100 @@ const AdminEnrollmentsTab = () => {
     return acc;
   }, {});
 
-  // --- DYNAMIC TABLE HELPERS ---
-  // Hide internal database IDs and passwords from the dynamic table
   const EXCLUDED_KEYS = ['id', 'user_id', 'course_id', 'session_name', 'enrolled_at', 'completed_at', 'password_hash', 'role', 'is_active', 'updated_at', 'created_at', 'avatar_url'];
 
   const getDynamicColumns = (students) => {
     if (!students || students.length === 0) return [];
-    // Grab all keys from the first student object, filter out the excluded ones
     return Object.keys(students[0]).filter(key => !EXCLUDED_KEYS.includes(key));
   };
 
   const formatColumnHeader = (key) => {
-    // Converts "progress_percent" to "Progress Percent"
     return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-8">
       
-      {/* Header & Course Selector */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+{/* --- 1. INCOMING ENROLLMENTS SECTION --- */}
+      <div className="animate-in fade-in duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+            <Bell className="w-5 h-5" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Incoming Enrollments</h2>
+          {pendingRequests.length > 0 && (
+            <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
+              {pendingRequests.length} New
+            </span>
+          )}
+        </div>
+
+        {pendingRequests.length === 0 ? (
+          <div className="bg-white p-8 rounded-xl border border-gray-200 border-dashed shadow-sm text-center">
+            <p className="text-gray-500 font-medium">No new enrollment requests at this time.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-500">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Student Name</th>
+                    <th className="px-6 py-4 font-semibold">Email</th>
+                    <th className="px-6 py-4 font-semibold">Requested Course</th>
+                    <th className="px-6 py-4 font-semibold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pendingRequests.map(req => {
+                    const currentAction = actionedRequests[req.id];
+                    return (
+                      <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-gray-900">{req.studentName}</td>
+                        <td className="px-6 py-4 text-gray-600">{req.email || 'N/A'}</td>
+                        <td className="px-6 py-4 text-gray-600 font-medium">
+                          {getCourseTitle(req.course_id)}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          
+                          {currentAction === 'accepted' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-bold">
+                              <Check className="w-3.5 h-3.5" /> Accepted
+                            </span>
+                          ) : currentAction === 'declined' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-700 rounded-full text-xs font-bold">
+                              <X className="w-3.5 h-3.5" /> Declined
+                            </span>
+                          ) : (
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => handleIncomingAction(req.id, 'accepted')} 
+                                className="px-4 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-full hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer"
+                              >
+                                Accept
+                              </button>
+                              <button 
+                                onClick={() => handleIncomingAction(req.id, 'declined')} 
+                                className="px-4 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* --- 2. ROSTER MANAGEMENT SECTION --- */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200 mt-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Roster Management</h1>
           <p className="text-sm text-gray-500 mt-1">Manage enrollments and cohort sessions.</p>

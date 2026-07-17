@@ -35,7 +35,7 @@ const Sidebar = ({ role = 'student' }) => {
    // { name: 'Calendar', icon: Calendar, path: '/student/timetable' },
     { name: 'Certificates', icon: Award, path: '/student/certificates' },
     { name: 'Notifications', icon: Bell, path: '/student/notifications' },
-    { name: 'Fees', icon: Receipt, path: '/student/fees' },
+   // { name: 'Fees', icon: Receipt, path: '/student/fees' },
   ];
 
   const navItems = role === 'admin' ? adminLinks : studentLinks;

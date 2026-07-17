@@ -4,7 +4,8 @@ import api from '../api/axiosConfig';
 
 const ResetPasswordPage = () => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('token'); // This grabs the token from ?token=xxx
+  const token = searchParams.get('token');
+  console.log("Extracted Token:", token); // This grabs the token from ?token=xxx
   
   const [newPassword, setNewPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
