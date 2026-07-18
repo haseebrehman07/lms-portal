@@ -153,7 +153,7 @@ const AdminHomeTab = () => {
           {/* Upcoming Trainings (Static for now) */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-gray-900">Upcoming Trainings</h3>
+              <h3 className="text-lg font-bold text-gray-900">Upcoming Courses</h3>
               <a href="#" className="text-sm text-blue-600 font-medium">View Calendar</a>
             </div>
             <div className="space-y-4">
