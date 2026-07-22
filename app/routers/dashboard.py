@@ -150,30 +150,6 @@ def get_top_courses(
     ]
 
 
-@router.get("/upcoming-trainings")
-def get_upcoming_trainings(
-    db: Session = Depends(get_db),
-    user=Depends(require_manager_or_admin)
-):
-    courses = (
-        db.query(Course)
-        .filter(Course.is_published == True)  # noqa
-        .order_by(desc(Course.created_at))
-        .limit(5)
-        .all()
-    )
-
-    return [
-        {
-            "course_id": str(c.id),
-            "title": c.title,
-            "type": c.type.value if c.type else None,
-            "total_lessons": c.total_lessons
-        }
-        for c in courses
-    ]
-
-
 @router.get("/learning-hours")
 def get_learning_hours(
     db: Session = Depends(get_db),

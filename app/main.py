@@ -26,6 +26,7 @@ from app.routers import quizzes
 from app.routers import assignment
 from app.routers import uploads
 from app.routers import certificates
+from app.routers import enrollment_requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,6 +105,7 @@ app.include_router(quizzes.router)
 app.include_router(assignment.router)
 app.include_router(uploads.router)
 app.include_router(certificates.router)
+app.include_router(enrollment_requests.router)
 
 
 @app.get("/health", tags=["Health"])
