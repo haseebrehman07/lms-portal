@@ -1,35 +1,42 @@
-import React, { useState } from 'react';
-import { Plus, X, Megaphone, Clock, User, Send, Bell } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, X, Megaphone, Clock, User, Send, Bell, Loader2 } from 'lucide-react';
+import api from '../../api/axiosConfig'; // Ensure this path is correct
 
 const AdminAnnouncementsTab = () => {
-  // Mock Data: Notification History
-  const [announcements, setAnnouncements] = useState([
-    {
-      id: 1,
-      title: 'Portal Maintenance Scheduled',
-      message: 'The student portal will undergo routine maintenance this Saturday from 2:00 AM to 4:00 AM. Expect brief outages.',
-      date: '2026-06-28T10:30:00',
-      sentBy: 'Admin Team'
-    },
-    {
-      id: 2,
-      title: 'Course Registration Deadline Extended',
-      message: 'Good news! The deadline for Fall 2026 course registration has been extended to July 15th. Please finalize your timetables.',
-      date: '2026-07-01T09:15:00',
-      sentBy: 'Registrar Office'
-    },
-    {
-      id: 3,
-      title: 'Welcome to the New Academic Year',
-      message: 'Welcome back students! Ensure you have checked your updated fee vouchers and timetables in your respective tabs.',
-      date: '2026-07-02T08:00:00',
-      sentBy: 'Admin - Haseeb'
-    }
-  ]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ title: '', message: '' });
   const MAX_CHARS = 500;
+
+  // --- FETCH REAL ANNOUNCEMENTS ---
+  const fetchAnnouncements = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.get('/announcements');
+      
+      // Map the backend response to fit your UI structure
+      const formatted = response.data.map(item => ({
+        id: item.id,
+        title: item.title,
+        message: item.body, // Mapping backend 'body' to frontend 'message'
+        date: item.created_at,
+        sentBy: 'Admin Team' // Using a static label, or you can map from created_by if needed
+      }));
+      
+      setAnnouncements(formatted);
+    } catch (error) {
+      console.error("Failed to fetch announcements:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
 
   const openModal = () => {
     setFormData({ title: '', message: '' });
@@ -40,20 +47,27 @@ const AdminAnnouncementsTab = () => {
     setIsModalOpen(false);
   };
 
-  const handleSend = () => {
+  // --- SEND REAL ANNOUNCEMENT ---
+  const handleSend = async () => {
     if (!formData.title || !formData.message) return alert("Please fill in both fields.");
     
-    const newAnnouncement = {
-      id: Date.now(),
-      title: formData.title,
-      message: formData.message,
-      date: new Date().toISOString(),
-      sentBy: 'Admin' // In a real app, grab from localStorage
-    };
-    
-    // Add to the top of the list (newest first)
-    setAnnouncements([newAnnouncement, ...announcements]);
-    closeModal();
+    try {
+      setIsSubmitting(true);
+      
+      // Send payload matching the AnnouncementCreate schema
+      await api.post('/announcements', {
+        title: formData.title,
+        body: formData.message
+      });
+      
+      closeModal();
+      await fetchAnnouncements(); // Refresh the list to show the new broadcast
+    } catch (error) {
+      console.error("Failed to broadcast announcement:", error);
+      alert("Error sending announcement. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Format date helper
@@ -90,36 +104,40 @@ const AdminAnnouncementsTab = () => {
           Notification History
         </h2>
         
-        {announcements.map((item) => (
-          <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative group hover:border-blue-200 transition-colors">
-            {/* Left Accent border */}
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 rounded-l-xl"></div>
-            
-            <div className="p-6 pl-8">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
-                <h3 className="font-bold text-lg text-gray-900">{item.title}</h3>
-                <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">
-                  <Clock className="w-3.5 h-3.5" />
-                  {formatDateTime(item.date)}
-                </span>
-              </div>
-              
-              <p className="text-gray-600 text-sm leading-relaxed mb-4">
-                {item.message}
-              </p>
-              
-              <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
-                <User className="w-3.5 h-3.5" />
-                Sent by: {item.sentBy}
-              </div>
-            </div>
+        {isLoading ? (
+          <div className="flex justify-center p-8">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
-        ))}
-
-        {announcements.length === 0 && (
+        ) : announcements.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300 text-gray-500">
             No announcements sent yet.
           </div>
+        ) : (
+          announcements.map((item) => (
+            <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative group hover:border-blue-200 transition-colors">
+              {/* Left Accent border */}
+              <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-500 rounded-l-xl"></div>
+              
+              <div className="p-6 pl-8">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
+                  <h3 className="font-bold text-lg text-gray-900">{item.title}</h3>
+                  <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100">
+                    <Clock className="w-3.5 h-3.5" />
+                    {formatDateTime(item.date)}
+                  </span>
+                </div>
+                
+                <p className="text-gray-600 text-sm leading-relaxed mb-4 whitespace-pre-wrap">
+                  {item.message}
+                </p>
+                
+                <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+                  <User className="w-3.5 h-3.5" />
+                  Sent by: {item.sentBy}
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
 
@@ -173,10 +191,14 @@ const AdminAnnouncementsTab = () => {
               </button>
               <button 
                 onClick={handleSend}
-                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm cursor-pointer shadow-sm"
+                disabled={isSubmitting}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm cursor-pointer shadow-sm disabled:opacity-70"
               >
-                <Send className="w-4 h-4" />
-                Broadcast Now
+                {isSubmitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Broadcasting...</>
+                ) : (
+                  <><Send className="w-4 h-4" /> Broadcast Now</>
+                )}
               </button>
             </div>
 

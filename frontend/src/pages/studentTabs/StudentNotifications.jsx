@@ -1,16 +1,63 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../../api/axiosConfig';
+import { Loader2 } from 'lucide-react'; // Assuming you use lucide-react for loading spinners
 
 const StudentNotifications = () => {
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'New Grade Posted', time: '2 hours ago', unread: true, msg: 'Your grade for Software Engineering Midterm has been released.' },
-    { id: 2, title: 'Attendance Warning', time: '1 day ago', unread: true, msg: 'Your attendance in Database Systems is below 75%.' },
-    { id: 3, title: 'Assignment Deadline', time: '2 days ago', unread: false, msg: 'Reminder: Excel Quiz is due tomorrow at 11:59 PM.' },
-    { id: 4, title: 'System Update', time: '3 days ago', unread: false, msg: 'The portal will be under maintenance on Sunday.' }
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        setIsLoading(true);
+        // Fetches announcements from the backend router
+        const response = await api.get('/announcements');
+        
+        // Maps the backend AnnouncementResponse to the frontend structure
+        const formattedNotifications = response.data.map((announcement) => {
+          // Format the created_at datetime to a readable string
+          const dateObj = new Date(announcement.created_at);
+          const timeString = dateObj.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+
+          return {
+            id: announcement.id,
+            title: announcement.title,
+            time: timeString,
+            unread: true, // Defaulting incoming announcements to unread
+            msg: announcement.body
+          };
+        });
+
+        setNotifications(formattedNotifications);
+      } catch (error) {
+        console.error("Error fetching announcements:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAnnouncements();
+  }, []);
+
+  // Note: Since the backend DELETE /announcements route is protected by require_admin, 
+  // dismissing them here only clears them from the local UI state for this session.
   const dismissNotification = (id) => {
     setNotifications(notifications.filter(n => n.id !== id));
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500">
+        <Loader2 className="w-8 h-8 animate-spin mb-4 text-blue-600" />
+        <p className="font-medium">Loading notifications...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 sm:p-6 text-gray-800">
@@ -21,7 +68,7 @@ const StudentNotifications = () => {
         {notifications.length > 0 && (
           <button 
             onClick={() => setNotifications([])}
-            className="text-sm text-gray-500 hover:text-red-600 transition-colors font-medium underline"
+            className="text-sm text-gray-500 hover:text-red-600 transition-colors font-medium underline cursor-pointer"
           >
             Clear All
           </button>
@@ -53,13 +100,13 @@ const StudentNotifications = () => {
                   </h3>
                   <span className="text-xs text-gray-400">{n.time}</span>
                 </div>
-                <p className="text-sm text-gray-600 mt-0.5">{n.msg}</p>
+                <p className="text-sm text-gray-600 mt-0.5 whitespace-pre-wrap">{n.msg}</p>
               </div>
 
               {/* Close Button */}
               <button 
                 onClick={() => dismissNotification(n.id)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
                 aria-label="Dismiss"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
