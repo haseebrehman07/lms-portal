@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Settings, X, Upload, Clock, User, BookOpen, Calendar, AlertTriangle } from 'lucide-react';
+import { Plus, Settings, X, Upload, Clock, User, BookOpen, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import api from '../../api/axiosConfig'; 
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../../utils/cropUtils';
@@ -19,7 +19,9 @@ const AdminCoursesTab = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [formData, setFormData] = useState({ title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: ''});
+  
+  // Added 'id' and 'is_published' to track the exact course state securely
+  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false });
 
   // 1. FETCH COURSES ON LOAD
   const fetchCourses = async () => {
@@ -50,16 +52,18 @@ const AdminCoursesTab = () => {
 
     if (course) {
       setFormData({ 
+        id: course.id,
         title: course.title || '', 
         instructor: course.instructor_name || '', 
         timings: course.timings || '',
         startDate: course.start_date || '',
         endDate: course.end_date || '',
-        thumbnailUrl: course.thumbnail_url || ''
+        thumbnailUrl: course.thumbnail_url || '',
+        is_published: course.is_published || false
       });
       setIsModalOpen(true);
     } else {
-      setFormData({ title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '' });
+      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false });
       setIsModalOpen(true);
     }
   };
@@ -116,15 +120,8 @@ const AdminCoursesTab = () => {
     };
 
     try {
-      // NOTE: We temporarily store the course we are editing in a local variable if needed, 
-      // but since we are using modal for editing metadata, we need to check if we have an ID
-      // To keep it simple, if editingCourse is set, we are in the Builder.
-      // For metadata editing, we'll rely on a different state or pass the ID if needed.
-      // Assuming openModal(course) implies we want to edit metadata, let's just use a quick check:
-      const courseId = courses.find(c => c.title === formData.title)?.id; // Quick fallback
-      
-      if (courseId) {
-        await api.patch(`/courses/${courseId}`, payload);
+      if (formData.id) {
+        await api.patch(`/courses/${formData.id}`, payload);
       } else {
         await api.post('/courses', payload);
       }
@@ -140,14 +137,27 @@ const AdminCoursesTab = () => {
 
   const executeDelete = async () => {
     try {
-      const courseId = courses.find(c => c.title === formData.title)?.id;
-      if(courseId) {
-        await api.delete(`/courses/${courseId}`);
+      if(formData.id) {
+        await api.delete(`/courses/${formData.id}`);
         await fetchCourses(); 
       }
       closeModal();
     } catch (error) {
       console.error("Failed to delete course:", error);
+    }
+  };
+
+  // --- PUBLISH COURSE LOGIC ---
+  const handlePublish = async () => {
+    if (!formData.id) return;
+    try {
+      await api.post(`/courses/${formData.id}/publish`);
+      alert("Course published successfully! It is now visible to students.");
+      await fetchCourses();
+      closeModal();
+    } catch (error) {
+      console.error("Failed to publish:", error);
+      alert(error.response?.data?.detail || "Failed to publish course.");
     }
   };
 
@@ -175,6 +185,12 @@ const AdminCoursesTab = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-6">
         {courses.map((course) => (
           <div key={course.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group hover:border-blue-300 transition-colors cursor-pointer">
+            
+            {/* Draft / Published Badge */}
+            <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold z-10 shadow-sm border ${course.is_published ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
+              {course.is_published ? 'Published' : 'Draft'}
+            </div>
+
             <button 
               onClick={(e) => { e.stopPropagation(); openModal(course); }}
               className="absolute top-3 right-3 p-1.5 bg-white/90 backdrop-blur text-gray-500 hover:text-blue-600 rounded-lg shadow border border-gray-100 z-10 transition-colors cursor-pointer"
@@ -416,8 +432,10 @@ const AdminCoursesTab = () => {
                 </div>
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-                  <div>
-                    {formData.title && courses.some(c => c.title === formData.title) && (
+                  
+                  {/* Left Side Buttons (Delete & Publish) */}
+                  <div className="flex gap-3">
+                    {formData.id && (
                       <button 
                         onClick={() => setIsConfirmingDelete(true)}
                         className="text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer"
@@ -425,8 +443,18 @@ const AdminCoursesTab = () => {
                         Delete Course
                       </button>
                     )}
+                    {formData.id && !formData.is_published && (
+                      <button 
+                        onClick={handlePublish}
+                        className="text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        Publish Course
+                      </button>
+                    )}
                   </div>
                   
+                  {/* Right Side Buttons (Cancel & Save) */}
                   <div className="flex gap-3">
                     <button 
                       onClick={closeModal}
@@ -438,7 +466,7 @@ const AdminCoursesTab = () => {
                       onClick={handleSave}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm cursor-pointer"
                     >
-                      {formData.title && courses.some(c => c.title === formData.title) ? 'Save Changes' : 'Create Course'}
+                      {formData.id ? 'Save Changes' : 'Create Course'}
                     </button>
                   </div>
                 </div>

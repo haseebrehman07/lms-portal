@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Loader2, Plus, X, RefreshCw, Copy, Check } from 'lucide-react';
+import { Search, Loader2, Plus, X } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const AdminUsersTab = () => {
@@ -10,81 +10,63 @@ const AdminUsersTab = () => {
   // --- ADD USER MODAL STATES ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
     phone: ''
   });
-  const [tempPassword, setTempPassword] = useState('');
 
-  // Fetch live enrollment data
-  const fetchEnrollments = async () => {
+  // Fetch live user data
+  const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const res = await api.get('/admin/enrollment-details');
+      const res = await api.get('/users');
       setUsers(res.data);
     } catch (err) {
-      console.error("Error fetching enrollments:", err);
+      console.error("Error fetching users:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchEnrollments();
+    fetchUsers();
   }, []);
 
   const filteredUsers = useMemo(() => {
-    return users.filter(user => 
-      user.name.toLowerCase().includes(filterName.toLowerCase())
-    );
+    return users.filter(user => {
+      const searchStr = filterName.toLowerCase();
+      const nameMatch = (user.name || '').toLowerCase().includes(searchStr);
+      const emailMatch = (user.email || '').toLowerCase().includes(searchStr);
+      return nameMatch || emailMatch;
+    });
   }, [filterName, users]);
-
-  // --- PASSWORD GENERATOR ---
-  const generateTempPassword = () => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setTempPassword(password);
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(tempPassword);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const openAddUserModal = () => {
     setNewUserForm({ name: '', email: '', phone: '' });
-    generateTempPassword();
     setIsModalOpen(true);
   };
 
-  // --- API SUBMISSION FOR BACKEND TEAMMATE ---
+  // --- API SUBMISSION ---
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // NOTE FOR BACKEND TEAMMATE: 
-      // Change '/admin/users' to whatever route handles user creation.
-      // The backend should flag this user to require a password change on first login.
-      await api.post('/admin/users', {
+      // Calls the existing POST /users endpoint.
+      // The backend will automatically email the user an invite link.
+      await api.post('/users', {
         name: newUserForm.name,
         email: newUserForm.email,
-        phone: newUserForm.phone,
-        password: tempPassword // Sending the temporary password to the backend
+        phone: newUserForm.phone
       });
 
-      alert('User created successfully!');
+      alert('User created successfully! An invite email has been sent.');
       setIsModalOpen(false);
-      fetchEnrollments(); // Refresh table data after successful creation
+      fetchUsers(); // Refresh table data
     } catch (error) {
       console.error("Failed to create user:", error);
-      alert(error.response?.data?.detail || 'Failed to create user. Please check the network tab.');
+      alert(error.response?.data?.detail || 'Failed to create user.');
     } finally {
       setIsSubmitting(false);
     }
@@ -106,7 +88,7 @@ const AdminUsersTab = () => {
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Search name..."
+              placeholder="Search name or email..."
               value={filterName}
               onChange={(e) => setFilterName(e.target.value)}
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-64 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -149,14 +131,14 @@ const AdminUsersTab = () => {
                   <td className="px-6 py-4 font-medium text-gray-900">{user.name}</td>
                   <td className="px-6 py-4 text-gray-600">{user.email}</td>
                   <td className="px-6 py-4 text-gray-600">{user.phone || 'N/A'}</td>
-                  <td className="px-6 py-4 text-gray-600">{user.enrolledDate}</td>
+                  {/* The backend returns created_at as an ISO string, slicing it to show just the date */}
+                  <td className="px-6 py-4 text-gray-600">{user.created_at ? user.created_at.slice(0, 10) : 'N/A'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      user.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
-                      user.status === 'Inactive' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
-                      'bg-red-50 text-red-600 border border-red-100'
+                      user.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 
+                      'bg-orange-50 text-orange-600 border border-orange-200'
                     }`}>
-                      {user.status}
+                      {user.is_active ? 'Active' : 'Pending Invite'}
                     </span>
                   </td>
                 </tr>
@@ -215,40 +197,6 @@ const AdminUsersTab = () => {
                 />
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-6">
-                <div className="flex justify-between items-center mb-2">
-                  <label className="block text-sm font-bold text-blue-900">Temporary Password</label>
-                  <button 
-                    type="button"
-                    onClick={generateTempPassword}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1 transition-colors"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Regenerate
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="text"
-                    readOnly
-                    value={tempPassword}
-                    className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm font-mono text-gray-800 focus:outline-none"
-                  />
-                  <button 
-                    type="button"
-                    onClick={copyToClipboard}
-                    className="p-2 bg-white border border-blue-200 rounded-lg hover:bg-blue-100 text-blue-600 transition-colors"
-                    title="Copy to clipboard"
-                  >
-                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-blue-700 mt-2">
-                  Copy this and share it securely with the user. They will be prompted to change it upon their first login.
-                </p>
-              </div>
-
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
                 <button 
                   type="button"
@@ -262,7 +210,7 @@ const AdminUsersTab = () => {
                   disabled={isSubmitting}
                   className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm disabled:bg-blue-400 flex items-center gap-2"
                 >
-                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create User'}
+                  {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Send Invite'}
                 </button>
               </div>
 
