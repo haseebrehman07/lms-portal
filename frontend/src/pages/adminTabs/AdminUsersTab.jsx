@@ -13,7 +13,8 @@ const AdminUsersTab = () => {
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
-    phone: ''
+    phone: '',
+    role: 'learner' // Added role with default value
   });
 
   // Fetch live user data
@@ -43,7 +44,7 @@ const AdminUsersTab = () => {
   }, [filterName, users]);
 
   const openAddUserModal = () => {
-    setNewUserForm({ name: '', email: '', phone: '' });
+    setNewUserForm({ name: '', email: '', phone: '', role: 'learner' });
     setIsModalOpen(true);
   };
 
@@ -53,12 +54,12 @@ const AdminUsersTab = () => {
     setIsSubmitting(true);
 
     try {
-      // Calls the existing POST /users endpoint.
-      // The backend will automatically email the user an invite link.
+      // Calls the existing POST /users endpoint with the selected role.
       await api.post('/users', {
         name: newUserForm.name,
         email: newUserForm.email,
-        phone: newUserForm.phone
+        phone: newUserForm.phone,
+        role: newUserForm.role // Sending role to backend
       });
 
       alert('User created successfully! An invite email has been sent.');
@@ -195,6 +196,19 @@ const AdminUsersTab = () => {
                   placeholder="e.g., +1 234 567 8900"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm"
                 />
+              </div>
+              
+              {/* Added Role Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select 
+                  value={newUserForm.role} 
+                  onChange={(e) => setNewUserForm({...newUserForm, role: e.target.value})}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 text-sm bg-white"
+                >
+                  <option value="learner">Learner</option>
+                  <option value="admin">Admin</option>
+                </select>
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
