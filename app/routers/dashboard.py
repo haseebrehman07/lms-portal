@@ -122,6 +122,10 @@ def get_top_courses(
     db: Session = Depends(get_db),
     user=Depends(require_manager_or_admin)
 ):
+    # "Top" = most enrolled. Previously ordered by avg_progress, which let
+    # courses with 0 enrollments (NULL/0 avg) outrank real, popular courses.
+    # Also drop courses with no enrollments at all - they aren't "top"
+    # anything and were cluttering the list with test/empty courses.
     results = (
         db.query(
             Course.id,
@@ -131,7 +135,8 @@ def get_top_courses(
         )
         .join(Enrollment, Course.id == Enrollment.course_id, isouter=True)
         .group_by(Course.id, Course.title)
-        .order_by(desc("avg_progress"))
+        .having(func.count(Enrollment.id) > 0)
+        .order_by(desc("enrolled_count"))
         .limit(5)
         .all()
     )
