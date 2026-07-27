@@ -97,14 +97,42 @@ def create_user(
     Admin creates a new account. No usable password is set here - the
     user receives an invite email with a real, database-backed token and
     sets their own password. The account stays inactive until they do.
+
+    If the email belongs to a user who never activated (is_active=False,
+    still holding an unused invite token), we treat this as "resend the
+    invite" instead of blocking with a duplicate-email error - this is
+    the common case of an admin re-clicking "Add User" for someone whose
+    first invite email never arrived or expired.
     """
     email = payload.email.lower().strip()
     existing = db.query(User).filter(User.email == email).first()
+
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+        if existing.is_active:
+            # Real duplicate: an active account already owns this email.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+
+        # Inactive account with this email = an unclaimed invite.
+        # Refresh it and resend, rather than blocking the admin.
+        invite_token = secrets.token_urlsafe(32)
+        existing.name = payload.name
+        existing.role = payload.role
+        existing.department = payload.department
+        existing.phone = payload.phone
+        existing.password_reset_token = invite_token
+        existing.password_reset_expires = (
+            datetime.now(timezone.utc) + timedelta(days=7)
         )
+        db.commit()
+        db.refresh(existing)
+
+        background_tasks.add_task(
+            send_invite_email, existing.email, existing.name, invite_token
+        )
+        return existing
 
     invite_token = secrets.token_urlsafe(32)
 

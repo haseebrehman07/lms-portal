@@ -92,9 +92,17 @@ def login(
         )
 
     if not user.is_active:
+        # Distinguish "you haven't activated your invite yet" from
+        # "an admin actually deactivated you" - very different situations,
+        # and telling a brand-new user to "contact your administrator"
+        # is confusing and wrong.
+        if user.password_reset_token:
+            detail = "Please check your email to activate your account first."
+        else:
+            detail = "Account is deactivated. Contact your administrator."
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated. Contact your administrator."
+            detail=detail
         )
 
     user.failed_login_attempts = 0
@@ -276,7 +284,9 @@ def reset_password(
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 def change_password(
+    request: Request,
     payload: ChangePasswordRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
