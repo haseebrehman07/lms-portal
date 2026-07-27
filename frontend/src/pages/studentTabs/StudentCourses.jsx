@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BookOpen, Clock, ArrowLeft, FileText, Download, FileArchive, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video, Loader2 } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const StudentCourses = () => {
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeTab, setActiveTab] = useState('Enrolled'); 
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const [isPageLoading, setIsPageLoading] = useState(true); // Global Page Loading state
-  const [processingCourseId, setProcessingCourseId] = useState(null); // Button-specific loading state
+  const [isPageLoading, setIsPageLoading] = useState(true); 
+  const [processingCourseId, setProcessingCourseId] = useState(null); 
+  const [loadingDetailsId, setLoadingDetailsId] = useState(null); 
   
+  // NEW: Track which specific lesson checkbox is currently loading
+  const [togglingLessonId, setTogglingLessonId] = useState(null);
+
   // Quiz States
   const [activeQuiz, setActiveQuiz] = useState(null);
   const [quizUIState, setQuizUIState] = useState('landing');
@@ -20,60 +23,60 @@ const StudentCourses = () => {
   const [completedItems, setCompletedItems] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setIsPageLoading(true);
+  // Extracted into a reusable function so we can call it when hitting the "Back" button
+  const fetchDashboardData = useCallback(async () => {
+    setIsPageLoading(true);
+    try {
+      const coursesRes = await api.get('/courses');
+      const realCourses = coursesRes.data;
+
+      let myEnrollments = [];
+      let myRequests = [];
+
       try {
-        const coursesRes = await api.get('/courses');
-        const realCourses = coursesRes.data;
+        const enrollmentsRes = await api.get('/enrollments/me');
+        myEnrollments = enrollmentsRes.data;
 
-        let myEnrollments = [];
-        let myRequests = [];
+        const requestsRes = await api.get('/enrollment-requests/me');
+        myRequests = requestsRes.data;
+      } catch (enrollErr) {
+        console.warn("Could not fetch personal data. Defaulting to none.", enrollErr);
+      }
 
-        try {
-          const enrollmentsRes = await api.get('/enrollments/me');
-          myEnrollments = enrollmentsRes.data;
+      const mergedCourses = realCourses.map(course => {
+        const enrollment = myEnrollments.find(e => e.course_id === course.id);
+        const pendingRequest = myRequests.find(r => r.course_id === course.id && r.status === 'pending');
 
-          const requestsRes = await api.get('/enrollment-requests/me');
-          myRequests = requestsRes.data;
-        } catch (enrollErr) {
-          console.warn("Could not fetch personal data. Defaulting to none.", enrollErr);
+        let status = 'none';
+        if (enrollment) {
+          status = 'enrolled';
+        } else if (pendingRequest) {
+          status = 'pending';
         }
 
-        const mergedCourses = realCourses.map(course => {
-          const enrollment = myEnrollments.find(e => e.course_id === course.id);
-          // Ensures it strictly checks for 'pending' requests only
-          const pendingRequest = myRequests.find(r => r.course_id === course.id && r.status === 'pending');
+        return {
+          ...course,
+          instructor: course.instructor_name || 'TBA',
+          thumbnailUrl: course.thumbnail_url,
+          endDate: course.end_date || '2099-12-31', 
+          enrollmentStatus: status,
+          progress: enrollment ? Math.round(enrollment.progress_percent || 0) : 0,
+          weeks: [], 
+          quiz: null
+        };
+      });
 
-          let status = 'none';
-          if (enrollment) {
-            status = 'enrolled';
-          } else if (pendingRequest) {
-            status = 'pending';
-          }
-
-          return {
-            ...course,
-            instructor: course.instructor_name || 'TBA',
-            thumbnailUrl: course.thumbnail_url,
-            endDate: course.end_date || '2099-12-31', 
-            enrollmentStatus: status,
-            progress: enrollment ? enrollment.progress_percent : 0,
-            weeks: [], 
-            quiz: null
-          };
-        });
-
-        setAllCourses(mergedCourses);
-      } catch (error) {
-        console.error("Error fetching courses:", error);
-      } finally {
-        setIsPageLoading(false);
-      }
-    };
-
-    fetchDashboardData();
+      setAllCourses(mergedCourses);
+    } catch (error) {
+      console.error("Error fetching courses:", error);
+    } finally {
+      setIsPageLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const filteredCourses = allCourses.filter(course => {
     const isExpired = new Date(course.endDate) < new Date();
@@ -91,7 +94,7 @@ const StudentCourses = () => {
   });
 
   const handleEnrollRequest = async (courseId) => {
-    setProcessingCourseId(courseId); // Start loading spinner on button
+    setProcessingCourseId(courseId); 
     try {
       await api.post('/enrollment-requests', { course_id: courseId });
       
@@ -102,18 +105,24 @@ const StudentCourses = () => {
       console.error("Failed to request enrollment:", error);
       alert(error.response?.data?.detail || "Failed to send request.");
     } finally {
-      setProcessingCourseId(null); // Stop loading spinner
+      setProcessingCourseId(null); 
     }
   };
 
   const loadCourseDetails = async (course) => {
-    setIsLoadingDetails(true);
+    setLoadingDetailsId(course.id);
     try {
       const res = await api.get(`/courses/${course.id}/detail`);
       const detailData = res.data;
 
       const materials = [];
       let foundQuiz = null;
+
+      // Automatically check off lessons the backend says are already completed
+      const alreadyCompleted = detailData.lessons
+        .filter(lesson => lesson.is_completed)
+        .map(lesson => lesson.id);
+      setCompletedItems(alreadyCompleted);
 
       detailData.lessons.forEach(lesson => {
         if (lesson.lesson_type === 'quiz') {
@@ -151,14 +160,34 @@ const StudentCourses = () => {
       console.error("Failed to load course details", error);
       alert("Could not load curriculum. Please try again.");
     } finally {
-      setIsLoadingDetails(false);
+      setLoadingDetailsId(null); 
     }
   };
 
-  const toggleCompletion = (itemId) => {
-    setCompletedItems(prev => 
-      prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]
-    );
+  // API Call to Mark Lesson Complete
+  const toggleCompletion = async (item) => {
+    if (item.isLocked) {
+      alert("This content is locked until your enrollment is approved.");
+      return;
+    }
+    
+    // Prevent un-checking or double-clicking while loading
+    if (completedItems.includes(item.id) || togglingLessonId === item.id) {
+      return; 
+    }
+
+    setTogglingLessonId(item.id);
+    try {
+      // Hits the backend route to recalculate percentage
+      await api.post(`/lessons/${item.id}/complete`);
+      // Update local UI immediately so it checks off
+      setCompletedItems(prev => [...prev, item.id]);
+    } catch (error) {
+      console.error("Failed to complete lesson:", error);
+      alert(error.response?.data?.detail || "Failed to mark lesson complete.");
+    } finally {
+      setTogglingLessonId(null);
+    }
   };
 
   const handleFileClick = (e, item) => {
@@ -175,7 +204,6 @@ const StudentCourses = () => {
     window.open(item.url, '_blank');
   };
 
-  // --- QUIZ ENGINE LOGIC ---
   const startQuiz = () => {
     if (activeCourse.quiz?.isLocked) {
       alert("Quiz is locked.");
@@ -210,11 +238,13 @@ const StudentCourses = () => {
     return () => clearInterval(timerId);
   }, [quizUIState, timeLeft]);
 
+  // Hitting Back automatically fetches the new data so the percentage bar updates
   const resetCourseView = () => {
     setActiveCourse(null);
     setActiveQuiz(null);
     setQuizResult(null);
     setQuizUIState('landing');
+    fetchDashboardData(); 
   };
 
 
@@ -277,11 +307,15 @@ const StudentCourses = () => {
                       </a>
                     </div>
 
+                    {/* Updated Checkbox with Backend Integration & Loading State */}
                     <button 
-                      onClick={() => toggleCompletion(item.id)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors p-2 cursor-pointer"
+                      onClick={() => toggleCompletion(item)}
+                      disabled={togglingLessonId === item.id || completedItems.includes(item.id)}
+                      className={`p-2 transition-colors ${completedItems.includes(item.id) ? 'text-blue-500 cursor-default' : 'text-gray-400 hover:text-blue-600 cursor-pointer'}`}
                     >
-                      {completedItems.includes(item.id) ? (
+                      {togglingLessonId === item.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      ) : completedItems.includes(item.id) ? (
                         <CheckSquare className="w-5 h-5 text-blue-500" />
                       ) : (
                         <Square className="w-5 h-5" />
@@ -412,10 +446,10 @@ const StudentCourses = () => {
                       </div>
                       <button 
                         onClick={() => loadCourseDetails(course)}
-                        disabled={isLoadingDetails}
+                        disabled={loadingDetailsId === course.id}
                         className="w-full py-2 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {isLoadingDetails ? (
+                        {loadingDetailsId === course.id ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>
                         ) : (
                           'View Course'
@@ -427,9 +461,14 @@ const StudentCourses = () => {
                   {activeTab === 'Completed' && (
                     <button 
                       onClick={() => loadCourseDetails(course)}
-                      className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-200 transition-colors cursor-pointer"
+                      disabled={loadingDetailsId === course.id}
+                      className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-bold text-sm hover:bg-gray-200 transition-colors cursor-pointer flex justify-center items-center gap-2 disabled:opacity-50"
                     >
-                      Review Course
+                      {loadingDetailsId === course.id ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>
+                      ) : (
+                        'Review Course'
+                      )}
                     </button>
                   )}
 
