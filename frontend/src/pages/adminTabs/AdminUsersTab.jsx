@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Loader2, Plus, X } from 'lucide-react';
+import { Search, Loader2, Plus, X, Trash2 } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const AdminUsersTab = () => {
@@ -14,7 +14,7 @@ const AdminUsersTab = () => {
     name: '',
     email: '',
     phone: '',
-    role: 'learner' // Added role with default value
+    role: 'learner' 
   });
 
   // Fetch live user data
@@ -48,28 +48,45 @@ const AdminUsersTab = () => {
     setIsModalOpen(true);
   };
 
-  // --- API SUBMISSION ---
+  // --- API SUBMISSION (CREATE) ---
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // Calls the existing POST /users endpoint with the selected role.
       await api.post('/users', {
         name: newUserForm.name,
         email: newUserForm.email,
         phone: newUserForm.phone,
-        role: newUserForm.role // Sending role to backend
+        role: newUserForm.role 
       });
 
       alert('User created successfully! An invite email has been sent.');
       setIsModalOpen(false);
-      fetchUsers(); // Refresh table data
+      fetchUsers(); 
     } catch (error) {
       console.error("Failed to create user:", error);
       alert(error.response?.data?.detail || 'Failed to create user.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // --- API SUBMISSION (DELETE/ABORT) ---
+  const handleDeleteUser = async (userId, userName) => {
+    const isConfirmed = window.confirm(
+      `Are you sure you want to remove ${userName}?\n\nIf they have a pending invite, the link will expire immediately and they will need to request a new one.`
+    );
+    
+    if (!isConfirmed) return;
+
+    try {
+      await api.delete(`/users/${userId}`);
+      // FIX: Instead of calling fetchUsers(), we instantly slice the deleted user out of the local table state.
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
+    } catch (error) {
+      console.error("Failed to delete user:", error);
+      alert(error.response?.data?.detail || 'Failed to delete user.');
     }
   };
 
@@ -116,12 +133,13 @@ const AdminUsersTab = () => {
               <th className="px-6 py-4 font-semibold">Phone</th>
               <th className="px-6 py-4 font-semibold">Enrolled Date</th>
               <th className="px-6 py-4 font-semibold">Status</th>
+              <th className="px-6 py-4 font-semibold text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredUsers.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
                   No users found matching your search.
                 </td>
               </tr>
@@ -132,7 +150,6 @@ const AdminUsersTab = () => {
                   <td className="px-6 py-4 font-medium text-gray-900">{user.name}</td>
                   <td className="px-6 py-4 text-gray-600">{user.email}</td>
                   <td className="px-6 py-4 text-gray-600">{user.phone || 'N/A'}</td>
-                  {/* The backend returns created_at as an ISO string, slicing it to show just the date */}
                   <td className="px-6 py-4 text-gray-600">{user.created_at ? user.created_at.slice(0, 10) : 'N/A'}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -141,6 +158,15 @@ const AdminUsersTab = () => {
                     }`}>
                       {user.is_active ? 'Active' : 'Pending Invite'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => handleDeleteUser(user.id, user.name)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove User"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))
@@ -198,7 +224,6 @@ const AdminUsersTab = () => {
                 />
               </div>
               
-              {/* Added Role Dropdown */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                 <select 

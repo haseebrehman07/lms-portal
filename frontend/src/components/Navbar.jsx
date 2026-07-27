@@ -5,10 +5,10 @@ const Navbar = ({ roleTitle }) => {
   const navigate = useNavigate();
   
   // Pull the name we just saved in Step 1
-  const userName = localStorage.getItem('userName') || 'User';
+  const userName = sessionStorage.getItem('userName') || 'User';
 
   const handleLogout = () => {
-    localStorage.clear(); // Clears token, role, and name all at once
+    sessionStorage.clear(); // Clears token, role, and name all at once
     navigate('/');
   };
 

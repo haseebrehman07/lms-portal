@@ -86,7 +86,7 @@ const AdminCoursesTab = () => {
     setCroppedAreaPixels(croppedAreaPixels);
   };
 
-  const handleCropAndUpload = async () => {
+const handleCropAndUpload = async () => {
     setIsUploading(true);
     try {
       const croppedImageFile = await getCroppedImg(rawImage, croppedAreaPixels);
@@ -94,10 +94,12 @@ const AdminCoursesTab = () => {
       const uploadData = new FormData();
       uploadData.append('file', croppedImageFile);
 
-      const res = await api.post('/upload/image', uploadData, {
+      // CHANGED: Match the FastAPI backend route
+      const res = await api.post('/uploads/thumbnail', uploadData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
+      // The backend returns a JSON object containing "url"
       setFormData({ ...formData, thumbnailUrl: res.data.url });
       setRawImage(null); 
     } catch (error) {

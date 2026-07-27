@@ -8,6 +8,7 @@ const ResetPasswordPage = () => {
   console.log("Extracted Token:", token); // This grabs the token from ?token=xxx
   
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirm state
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
   const navigate = useNavigate();
@@ -22,9 +23,18 @@ const ResetPasswordPage = () => {
     e.preventDefault();
     if (!token) return;
 
+    // Frontend validation: Check if passwords match before sending
+    if (newPassword !== confirmPassword) {
+      setMessage({ text: 'Passwords do not match.', type: 'error' });
+      return;
+    }
+
     setIsLoading(true);
+    // Clear any previous error messages when starting a valid request
+    setMessage({ text: '', type: '' }); 
+    
     try {
-      // Sends token and password to backend (matches auth.py)
+      // Sends only the token and the final validated password to the backend
       await api.post('/auth/reset-password', { 
         token: token, 
         new_password: newPassword 
@@ -57,13 +67,25 @@ const ResetPasswordPage = () => {
             <input 
               type="password" 
               placeholder="Enter new password" 
-              className="w-full p-2 border rounded" 
+              className="w-full p-2 border rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+              value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)} 
               required 
             />
+            
+            {/* Added Confirm Password Input */}
+            <input 
+              type="password" 
+              placeholder="Confirm new password" 
+              className="w-full p-2 border rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)} 
+              required 
+            />
+            
             <button 
               disabled={isLoading || !token} 
-              className="w-full bg-blue-600 text-white py-2 rounded disabled:bg-gray-400"
+              className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400"
             >
               {isLoading ? 'Updating...' : 'Update Password'}
             </button>

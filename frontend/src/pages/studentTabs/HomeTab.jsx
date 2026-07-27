@@ -13,8 +13,8 @@ const StudentDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Retrieve user name from localStorage
-  const user = JSON.parse(localStorage.getItem('user')) || { name: 'Student' };
+  // Retrieve user name from sessionStorage
+  const user = JSON.parse(sessionStorage.getItem('user')) || { name: 'Student' };
 
   useEffect(() => {
     const fetchDashboardData = async () => {

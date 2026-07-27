@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 const TopNavbar = () => {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user')) || { name: 'Guest', role: 'visitor' };
+  const user = JSON.parse(sessionStorage.getItem('user')) || { name: 'Guest', role: 'visitor' };
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">

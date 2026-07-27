@@ -5,7 +5,7 @@ const API_URL = 'http://127.0.0.1:8000/api';
 
 // Helper to grab the token for locked routes
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('token'); // Or however you store your token
+    const token = sessionStorage.getItem('token'); // Or however you store your token
     return {
         headers: { Authorization: `Bearer ${token}` }
     };

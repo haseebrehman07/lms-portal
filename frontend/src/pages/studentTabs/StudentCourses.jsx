@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Clock, ArrowLeft, FileText, Download, FileArchive, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video } from 'lucide-react';
+import { BookOpen, Clock, ArrowLeft, FileText, Download, FileArchive, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video, Loader2 } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const StudentCourses = () => {
-  // --- STATE MANAGEMENT ---
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeTab, setActiveTab] = useState('Enrolled'); 
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(true); // Global Page Loading state
+  const [processingCourseId, setProcessingCourseId] = useState(null); // Button-specific loading state
   
   // Quiz States
   const [activeQuiz, setActiveQuiz] = useState(null);
@@ -19,13 +20,10 @@ const StudentCourses = () => {
   const [completedItems, setCompletedItems] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
 
-  // --- DATA FETCHING ---
   useEffect(() => {
     const fetchDashboardData = async () => {
+      setIsPageLoading(true);
       try {
-        setIsLoadingDetails(true);
-        
-        // 1. Fetch all published courses
         const coursesRes = await api.get('/courses');
         const realCourses = coursesRes.data;
 
@@ -33,22 +31,18 @@ const StudentCourses = () => {
         let myRequests = [];
 
         try {
-          // 2. Fetch the user's active enrollments
           const enrollmentsRes = await api.get('/enrollments/me');
           myEnrollments = enrollmentsRes.data;
 
-          // 3. Fetch the user's pending requests (so we can show the Lock icon)
           const requestsRes = await api.get('/enrollment-requests/me');
           myRequests = requestsRes.data;
         } catch (enrollErr) {
           console.warn("Could not fetch personal data. Defaulting to none.", enrollErr);
         }
 
-        // 4. Merge them together for the UI
         const mergedCourses = realCourses.map(course => {
-          // Check if they are fully enrolled
           const enrollment = myEnrollments.find(e => e.course_id === course.id);
-          // Check if they have a pending request sitting in the Admin inbox
+          // Ensures it strictly checks for 'pending' requests only
           const pendingRequest = myRequests.find(r => r.course_id === course.id && r.status === 'pending');
 
           let status = 'none';
@@ -74,14 +68,13 @@ const StudentCourses = () => {
       } catch (error) {
         console.error("Error fetching courses:", error);
       } finally {
-        setIsLoadingDetails(false);
+        setIsPageLoading(false);
       }
     };
 
     fetchDashboardData();
   }, []);
 
-  // --- TAB FILTERING LOGIC ---
   const filteredCourses = allCourses.filter(course => {
     const isExpired = new Date(course.endDate) < new Date();
     
@@ -97,23 +90,22 @@ const StudentCourses = () => {
     return false;
   });
 
-  // --- HANDLERS ---
   const handleEnrollRequest = async (courseId) => {
+    setProcessingCourseId(courseId); // Start loading spinner on button
     try {
-      // Sends the request to the Admin Inbox endpoint
       await api.post('/enrollment-requests', { course_id: courseId });
       
       setAllCourses(allCourses.map(c => 
         c.id === courseId ? { ...c, enrollmentStatus: 'pending' } : c
       ));
-      alert("Enrollment requested! Waiting for admin approval.");
     } catch (error) {
       console.error("Failed to request enrollment:", error);
       alert(error.response?.data?.detail || "Failed to send request.");
+    } finally {
+      setProcessingCourseId(null); // Stop loading spinner
     }
   };
 
-  // FETCH FULL COURSE DETAILS ON CLICK
   const loadCourseDetails = async (course) => {
     setIsLoadingDetails(true);
     try {
@@ -225,21 +217,24 @@ const StudentCourses = () => {
     setQuizUIState('landing');
   };
 
-  // ==========================================
-  // VIEW 3: QUIZ INTERFACE
-  // ==========================================
+
+  if (isPageLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-500">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+        <p className="font-medium">Loading your courses...</p>
+      </div>
+    );
+  }
+
   if (quizUIState === 'taking') {
     return <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">Quiz Interface Running...</div>; 
   }
 
-  // ==========================================
-  // VIEW 2: COURSE DETAIL (SYLLABUS VIEW)
-  // ==========================================
   if (activeCourse) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 text-gray-800">
         
-        {/* Header */}
         <div className="flex items-center gap-4 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
           <button onClick={resetCourseView} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer">
             <ArrowLeft className="w-5 h-5" />
@@ -250,7 +245,6 @@ const StudentCourses = () => {
           </div>
         </div>
 
-        {/* Syllabus Content */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {(!activeCourse.weeks || activeCourse.weeks[0].materials.length === 0) && !activeCourse.quiz && (
             <div className="p-12 text-center text-gray-500">
@@ -299,7 +293,6 @@ const StudentCourses = () => {
             </div>
           ))}
 
-          {/* Final Quiz Section */}
           {activeCourse.quiz && (
             <div className="border-t-4 border-gray-50 bg-white">
               <div className="bg-blue-50/50 px-6 py-4 border-b border-blue-100 flex items-center gap-2">
@@ -329,9 +322,6 @@ const StudentCourses = () => {
     );
   }
 
-  // ==========================================
-  // VIEW 1: MAIN COURSES GRID
-  // ==========================================
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 text-gray-800">
       
@@ -394,9 +384,14 @@ const StudentCourses = () => {
                   {activeTab === 'Discover' && course.enrollmentStatus === 'none' && (
                     <button 
                       onClick={() => handleEnrollRequest(course.id)}
-                      className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors cursor-pointer"
+                      disabled={processingCourseId === course.id}
+                      className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors disabled:bg-blue-400 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                     >
-                      Request Enrollment
+                      {processingCourseId === course.id ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Requesting...</>
+                      ) : (
+                        'Request Enrollment'
+                      )}
                     </button>
                   )}
 
@@ -418,9 +413,13 @@ const StudentCourses = () => {
                       <button 
                         onClick={() => loadCourseDetails(course)}
                         disabled={isLoadingDetails}
-                        className="w-full py-2 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-pointer disabled:opacity-50"
+                        className="w-full py-2 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {isLoadingDetails ? 'Loading...' : 'Continue Learning'}
+                        {isLoadingDetails ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</>
+                        ) : (
+                          'View Course'
+                        )}
                       </button>
                     </>
                   )}

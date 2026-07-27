@@ -14,9 +14,9 @@ const StudentDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('token');
-      const role = localStorage.getItem('userRole');
-      const name = localStorage.getItem('userName') || 'Participant';
+      const token = sessionStorage.getItem('token');
+      const role = sessionStorage.getItem('userRole');
+      const name = sessionStorage.getItem('userName') || 'Participant';
 
       if (!token || role !== 'student') return navigate('/');
       setUserName(name);

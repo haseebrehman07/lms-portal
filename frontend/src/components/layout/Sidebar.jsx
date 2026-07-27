@@ -10,7 +10,7 @@ const Sidebar = ({ role = 'student' }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.clear();
+    sessionStorage.clear();
     navigate('/');
   };
 

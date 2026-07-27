@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api/axiosConfig';
-import { Check, X, Upload, Download, Users, ChevronDown, FileText, BookOpen, Bell } from 'lucide-react';
+import { Check, X, Upload, Download, Users, ChevronDown, FileText, BookOpen, Bell, Loader2 } from 'lucide-react';
 
 const AdminEnrollmentsTab = () => {
   const [enrollments, setEnrollments] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]); // New state specifically for requests
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -22,39 +23,26 @@ const AdminEnrollmentsTab = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [enrollRes, coursesRes] = await Promise.all([
+      // Added '/enrollment-requests' to fetch the actual inbox requests
+      const [enrollRes, coursesRes, requestsRes] = await Promise.all([
         api.get('/enrollments'),
-        api.get('/courses')
+        api.get('/courses'),
+        api.get('/enrollment-requests') 
       ]);
       
-      let usersData = [];
-      try {
-        const usersRes = await api.get('/users');
-        usersData = usersRes.data;
-      } catch (e) {
-        console.warn("Could not fetch users list");
-      }
-
-      const enrollmentsData = enrollRes.data;
       const coursesData = coursesRes.data;
-
       setCourses(coursesData);
       
       if (!selectedCourseId && coursesData.length > 0) {
         setSelectedCourseId(coursesData[0].id);
       }
 
-      const detailedEnrollments = enrollmentsData.map(enr => {
-        const matchedUser = usersData.find(u => u.id === enr.user_id);
-        return {
-          studentName: matchedUser ? (matchedUser.name || matchedUser.email) : `ID: ${enr.user_id.slice(0, 8)}...`,
-          department: matchedUser?.department || 'N/A',
-          ...matchedUser, 
-          ...enr, 
-        };
-      });
+      setEnrollments(enrollRes.data);
+      
+      // Filter out only the pending requests for the top table
+      const activeRequests = requestsRes.data.filter(req => req.status === 'pending');
+      setPendingRequests(activeRequests);
 
-      setEnrollments(detailedEnrollments);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -66,44 +54,26 @@ const AdminEnrollmentsTab = () => {
     fetchData();
   }, []);
 
-  // Helper to get Course Name
-  const getCourseTitle = (courseId) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? course.title : 'Unknown Course';
-  };
-
   // --- INCOMING ENROLLMENTS LOGIC ---
-  const handleIncomingAction = async (enrollmentId, action) => {
-    // 1. Optimistic UI update: Instantly turns the button into a bubble
-    setActionedRequests(prev => ({ ...prev, [enrollmentId]: action }));
+  const handleIncomingAction = async (requestId, action) => {
+    // 1. Optimistic UI update
+    setActionedRequests(prev => ({ ...prev, [requestId]: action }));
 
-    // 2. API Call: Leaves the route open for your backend teammate to catch
+    // 2. API Call: Hitting the CORRECT enrollment-requests endpoint
     try {
       const route = action === 'accepted' ? 'approve' : 'reject';
-      await api.patch(`/enrollments/${enrollmentId}/${route}`);
-      // Silently refresh data in the background
+      await api.patch(`/enrollment-requests/${requestId}/${route}`, {});
+      // Silently refresh data to move them from 'requests' into the active 'enrollments' table
       fetchData(); 
     } catch (error) {
-      console.error(`Failed to ${action} enrollment:`, error);
+      console.error(`Failed to ${action} request:`, error);
       // Revert the bubble if the backend explicitly fails
       setActionedRequests(prev => {
         const newState = { ...prev };
-        delete newState[enrollmentId];
+        delete newState[requestId];
         return newState;
       });
       alert(`Backend failed to process the ${action} request.`);
-    }
-  };
-
-  const handleStatusUpdate = async (enrollmentId, newStatus) => {
-    try {
-      if (newStatus === 'approved') {
-        await api.patch(`/enrollments/${enrollmentId}/approve`);
-      } 
-      await fetchData(); 
-    } catch (error) {
-      console.error("Failed to update status:", error);
-      alert("Error updating enrollment status.");
     }
   };
 
@@ -154,12 +124,6 @@ const AdminEnrollmentsTab = () => {
   };
 
   // --- DATA FILTERING & GROUPING ---
-  
-  // 1. Pending Requests Filter
-  // Keeps the row visible if it's currently pending OR if it was just actioned locally
-  const pendingRequests = enrollments.filter(e => e.status === 'pending' || actionedRequests[e.id]);
-
-  // 2. Session Grouping
   const courseEnrollments = enrollments.filter(e => e.course_id === selectedCourseId);
   const groupedEnrollments = courseEnrollments.reduce((acc, curr) => {
     const session = curr.session_name || 'Independent Learners';
@@ -179,10 +143,14 @@ const AdminEnrollmentsTab = () => {
     return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  if (isLoading && enrollments.length === 0) {
+    return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-8">
       
-{/* --- 1. INCOMING ENROLLMENTS SECTION --- */}
+      {/* --- 1. INCOMING ENROLLMENTS SECTION --- */}
       <div className="animate-in fade-in duration-300">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
@@ -217,10 +185,11 @@ const AdminEnrollmentsTab = () => {
                     const currentAction = actionedRequests[req.id];
                     return (
                       <tr key={req.id} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-4 font-bold text-gray-900">{req.studentName}</td>
-                        <td className="px-6 py-4 text-gray-600">{req.email || 'N/A'}</td>
+                        {/* Using the properties directly from EnrollmentRequestDetail schema */}
+                        <td className="px-6 py-4 font-bold text-gray-900">{req.user_name || 'Unknown User'}</td>
+                        <td className="px-6 py-4 text-gray-600">{req.user_email || 'N/A'}</td>
                         <td className="px-6 py-4 text-gray-600 font-medium">
-                          {getCourseTitle(req.course_id)}
+                          {req.course_title || 'Unknown Course'}
                         </td>
                         <td className="px-6 py-4 text-right">
                           
@@ -345,24 +314,18 @@ const AdminEnrollmentsTab = () => {
                   <table className="w-full text-left text-sm">
                     <thead className="bg-white border-b border-gray-100">
                       <tr>
-                        {/* Dynamically Map Headers */}
                         {dynamicColumns.map((colKey) => (
                           <th key={colKey} className="px-6 py-3 font-semibold text-gray-500 whitespace-nowrap">
                             {formatColumnHeader(colKey)}
                           </th>
                         ))}
-                        {/* Always keep Actions at the end */}
-                        <th className="px-6 py-3 font-semibold text-gray-500 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {students.map((enr) => (
                         <tr key={enr.id} className="hover:bg-gray-50/50 transition-colors">
-                          
-                          {/* Dynamically Map Cells */}
                           {dynamicColumns.map((colKey) => (
                             <td key={colKey} className="px-6 py-4">
-                              {/* Special Formatting for Progress */}
                               {colKey === 'progress_percent' ? (
                                 <div className="flex items-center gap-2">
                                   <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -374,18 +337,16 @@ const AdminEnrollmentsTab = () => {
                                   <span className="text-xs font-medium text-gray-600">{enr[colKey]}%</span>
                                 </div>
                               ) 
-                              /* Special Formatting for Status */
                               : colKey === 'status' ? (
                                 <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide uppercase ${
                                   enr[colKey] === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 
-                                  enr[colKey] === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 
+                                  enr[colKey] === 'not_started' ? 'bg-gray-100 text-gray-700 border border-gray-200' : 
                                   enr[colKey] === 'completed' ? 'bg-blue-50 text-blue-600 border border-blue-200' : 
-                                  'bg-red-50 text-red-600 border border-red-200'
+                                  'bg-emerald-50 text-emerald-600 border border-emerald-200'
                                 }`}>
-                                  {enr[colKey]}
+                                  {enr[colKey].replace('_', ' ')}
                                 </span>
                               ) 
-                              /* Default Text Formatting for everything else */
                               : (
                                 <span className="text-gray-600 font-medium">
                                   {typeof enr[colKey] === 'object' ? JSON.stringify(enr[colKey]) : String(enr[colKey] || '—')}
@@ -393,26 +354,6 @@ const AdminEnrollmentsTab = () => {
                               )}
                             </td>
                           ))}
-
-                          {/* Static Actions Column */}
-                          <td className="px-6 py-4 text-right">
-                            {enr.status === 'pending' ? (
-                              <div className="flex justify-end gap-2">
-                                <button 
-                                  onClick={() => handleStatusUpdate(enr.id, 'approved')}
-                                  className="p-1.5 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100 transition-colors cursor-pointer"
-                                  title="Approve"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                                <button className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors cursor-pointer" title="Reject">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 font-medium text-xs">—</span>
-                            )}
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -473,9 +414,9 @@ const AdminEnrollmentsTab = () => {
                 <button 
                   type="submit" 
                   disabled={isUploading}
-                  className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                  className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isUploading ? 'Importing...' : 'Upload & Enroll Students'}
+                  {isUploading ? <><Loader2 className="w-4 h-4 animate-spin"/> Importing...</> : 'Upload & Enroll Students'}
                 </button>
               </div>
             </form>

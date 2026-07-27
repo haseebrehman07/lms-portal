@@ -1,8 +1,10 @@
 // frontend/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import api from './api/axiosConfig';
+
+// Import the Route Guard
+import ProtectedRoute from './components/ProtectedRoute';
 
 import AdminLayout from './pages/AdminLayout';
 import CourseAllocationTab from './pages/adminTabs/CourseAllocationTab';
@@ -14,7 +16,6 @@ import AdminReportsTab from './pages/adminTabs/AdminReportsTab';
 import AdminScheduleTab from './pages/adminTabs/AdminScheduleTab';
 import AdminCertificatesTab from './pages/adminTabs/AdminCertificatesTab';
 
-// Imports... (Login, StudentLayout, etc. remain the same)
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ForgotPassword from './pages/ForgotPassword';
@@ -30,7 +31,7 @@ import StudentCertificates from './pages/studentTabs/StudentCertificates';
 import StudentNotifications from './pages/studentTabs/StudentNotifications';
 import StudentDeadlines from './pages/studentTabs/StudentDeadlines';
 
-const EnrollmentsTab = () => <div><h1 style={{color: 'white'}}>New Enrollments</h1><p style={{color: '#94a3b8'}}>Catalog incoming...</p></div>;
+const EnrollmentsTab = () => <div><h1 className="text-white">New Enrollments</h1><p className="text-slate-400">Catalog incoming...</p></div>;
 
 function App() {
   const [enrollments, setEnrollments] = useState([]);
@@ -41,15 +42,13 @@ function App() {
   const [teacherSubmissions, setTeacherSubmissions] = useState([]);
 
   useEffect(() => {
-    const role = localStorage.getItem('role'); 
+    const role = sessionStorage.getItem('role'); 
 
-    if (role === 'student') {
-      // We only fetch enrollments for now since assignments doesn't exist yet
+    // Checking for both 'student' and 'learner' to match your backend RoleEnum
+    if (role === 'student' || role === 'learner') {
       api.get('/enrollments/me')
         .then((enrRes) => {
           setEnrollments(enrRes.data);
-          // If you need assignments, you can set it to an empty array for now
-          // to prevent UI crashes until you build the backend route for it.
           setStudentAssignments([]); 
         })
         .catch(err => {
@@ -61,16 +60,24 @@ function App() {
   return (
     <Router>
       <Routes>
+        {/* PUBLIC ROUTES */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         
-        {/* STUDENT ROUTES */}
-        <Route path="/student" element={<StudentLayout />}>
+        {/* PROTECTED STUDENT ROUTES */}
+        <Route 
+          path="/student" 
+          element={
+            <ProtectedRoute allowedRoles={['learner', 'student']}>
+              <StudentLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<HomeTab enrollments={enrollments} />} />
           <Route path="courses" element={<StudentCourses />} />
-          <Route path="attendance" element={<StudentAttendance />} /> {/* Add this */}
+          <Route path="attendance" element={<StudentAttendance />} />
           <Route path="fees" element={<StudentFees />} />
           <Route path="timetable" element={<StudentTimetable />} />
           <Route path="gradebook" element={<StudentGradebook/>} />
@@ -80,7 +87,15 @@ function App() {
           <Route path="deadlines" element={<StudentDeadlines />} />
         </Route>
 
-        <Route path="/admin" element={<AdminLayout />}>
+        {/* PROTECTED ADMIN ROUTES */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'manager']}>
+              <AdminLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<CourseAllocationTab />} />
           <Route path="courses" element={<AdminCoursesTab />} />
           <Route path="enrollments" element={<AdminEnrollmentsTab />} />
@@ -91,6 +106,8 @@ function App() {
           <Route path="certificates" element={<AdminCertificatesTab/>}/>
         </Route>
 
+        {/* CATCH-ALL ROUTE (Redirects unknown URLs to login) */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

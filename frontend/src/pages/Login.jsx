@@ -17,12 +17,12 @@ const Login = () => {
     setIsLoading(true);
     try {
       const loginResponse = await api.post('/auth/login', { email, password });
-      localStorage.setItem('token', loginResponse.data.access_token);
+      sessionStorage.setItem('token', loginResponse.data.access_token);
       
       const userResponse = await api.get('/auth/me');
       const user = userResponse.data;
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('role', user.role);
+      sessionStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('role', user.role);
 
       if (user.role === 'admin') navigate('/admin');
       else if (user.role === 'teacher') navigate('/teacher');

@@ -10,7 +10,7 @@ const NotificationModal = () => {
   // 1. Fetch unread messages the second this component loads
   useEffect(() => {
     const fetchNotifications = async () => {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) return;
       
       try {
@@ -33,7 +33,7 @@ const NotificationModal = () => {
 
   // 3. Mark as read and move to the next message (if there are multiple)
   const handleAcknowledge = async () => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       await axios.put(`http://localhost:5000/api/student/notifications/${currentNotification._id}/read`, {}, config);
