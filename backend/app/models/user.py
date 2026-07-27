@@ -45,10 +45,14 @@ class User(Base):
     phone = Column(String(30), nullable=True)
     avatar_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    must_change_password = Column(Boolean, default=False, nullable=False)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
     # False until the user accepts their invite / sets their own password.
     # Admin-created accounts start as False; self-registration (if ever
     # re-enabled) would start as True.
-    password_reset_token = Column(String(100), nullable=True, index=True)
+    password_reset_token = Column(String(255), nullable=True, index=True)
     password_reset_expires = Column(DateTime(timezone=True), nullable=True)
     # Set every time the password actually changes. Any JWT issued before
     # this timestamp is treated as invalid, even if it hasn't expired yet -

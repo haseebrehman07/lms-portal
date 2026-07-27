@@ -72,7 +72,10 @@ def upload_to_r2(
 
     try:
         client = get_r2_client()
-        extension = original_filename.rsplit(".", 1)[-1].lower()
+        extension = (
+            original_filename.rsplit(".", 1)[-1].lower()
+            if "." in original_filename else "bin"
+        )
         unique_key = f"{folder}/{uuid.uuid4()}.{extension}"
 
         client.put_object(
@@ -88,15 +91,15 @@ def upload_to_r2(
 
     except ClientError as e:
         logger.error(f"R2 upload failed: {e}")
-        raise Exception("File upload failed. Please try again.")
+        raise Exception("File upload failed. Please try again.") from e
 
 
-def upload_video(file_content: bytes, filename: str) -> str:
-    return upload_to_r2(file_content, "videos", filename, "video/mp4")
+def upload_video(file_content: bytes, filename: str, content_type: str) -> str:
+    return upload_to_r2(file_content, "videos", filename, content_type)
 
 
-def upload_thumbnail(file_content: bytes, filename: str) -> str:
-    return upload_to_r2(file_content, "thumbnails", filename, "image/jpeg")
+def upload_thumbnail(file_content: bytes, filename: str, content_type: str) -> str:
+    return upload_to_r2(file_content, "thumbnails", filename, content_type)
 
 
 def upload_pdf(file_content: bytes, filename: str) -> str:
@@ -121,6 +124,9 @@ def upload_certificate_pdf(
 
     try:
         client = get_r2_client()
+        # Deterministic key (not a random UUID) - re-generating a
+        # certificate for the same user+course overwrites the same
+        # object instead of creating duplicates.
         key = f"certificates/{user_id}/{course_id}.pdf"
 
         client.put_object(
@@ -134,4 +140,4 @@ def upload_certificate_pdf(
 
     except ClientError as e:
         logger.error(f"Certificate upload failed: {e}")
-        raise Exception("Certificate upload failed.")
+        raise Exception("Certificate upload failed.") from e

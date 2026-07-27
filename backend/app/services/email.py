@@ -37,7 +37,7 @@ def _send_email(to_email: str, subject: str, html_body: str) -> None:
 
 
 def send_invite_email(to_email: str, name: str, token: str) -> None:
-    link = f"{settings.frontend_url}/accept-invite?token={token}"
+    link = f"{settings.frontend_url}/reset-password?token={token}"
     html = f"""
     <p>Hi {name},</p>
     <p>An account has been created for you on the LMS. Click below to set your password and get started:</p>

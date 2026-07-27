@@ -28,7 +28,7 @@ async def upload_video_file(
     if file.content_type not in ALLOWED_VIDEO_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed: MP4, WebM, OGG, MOV"
+            detail="Invalid file type. Allowed: MP4, WebM, OGG, MOV"
         )
 
     content = await file.read()
@@ -40,7 +40,7 @@ async def upload_video_file(
         )
 
     try:
-        url = upload_video(content, file.filename)
+        url = upload_video(content, file.filename, file.content_type)
         return {
             "url": url,
             "filename": file.filename,
@@ -51,7 +51,7 @@ async def upload_video_file(
         logger.error(f"Video upload error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Video upload failed. Please try again."
         )
 
 
@@ -75,7 +75,7 @@ async def upload_thumbnail_file(
         )
 
     try:
-        url = upload_thumbnail(content, file.filename)
+        url = upload_thumbnail(content, file.filename, file.content_type)
         return {
             "url": url,
             "filename": file.filename,
@@ -83,9 +83,10 @@ async def upload_thumbnail_file(
             "type": "thumbnail"
         }
     except Exception as e:
+        logger.error(f"Thumbnail upload error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="Thumbnail upload failed. Please try again."
         )
 
 
@@ -117,9 +118,10 @@ async def upload_pdf_file(
             "type": "pdf"
         }
     except Exception as e:
+        logger.error(f"PDF upload error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="PDF upload failed. Please try again."
         )
 
 
@@ -155,7 +157,8 @@ async def upload_assignment_file_endpoint(
             "type": "assignment"
         }
     except Exception as e:
+        logger.error(f"Assignment file upload error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="File upload failed. Please try again."
         )

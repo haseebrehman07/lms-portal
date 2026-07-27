@@ -1,8 +1,8 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -24,8 +24,9 @@ from app.routers import reports
 from app.routers import announcements
 from app.routers import quizzes
 from app.routers import assignment
-from app.routers import certificates
 from app.routers import uploads
+from app.routers import certificates
+from app.routers import enrollment_requests
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,8 +68,7 @@ allowed_origins = (
     else ["https://yourdomain.com"]
 )
 
-app.mount("/media", StaticFiles(directory="uploads"), name="media")
-
+# CORS must be added BEFORE static files
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -102,8 +102,15 @@ app.include_router(reports.router)
 app.include_router(announcements.router)
 app.include_router(quizzes.router)
 app.include_router(assignment.router)
-app.include_router(certificates.router)
 app.include_router(uploads.router)
+app.include_router(certificates.router)
+app.include_router(enrollment_requests.router)
+
+
+# Static files mounted AFTER routers and middleware
+if os.path.exists("uploads"):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/media", StaticFiles(directory="uploads"), name="media")
 
 
 @app.get("/health", tags=["Health"])

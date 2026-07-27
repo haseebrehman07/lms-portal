@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.enrollment import Enrollment, LessonProgress, EnrollmentStatusEnum
 from app.models.lesson import Lesson
 from app.models.certificate import Certificate
+from app.services.certificate_pdf import generate_certificate_pdf
 
 
 def recalculate_progress(enrollment_id, db: Session):
@@ -42,6 +43,16 @@ def recalculate_progress(enrollment_id, db: Session):
                 course_id=enrollment.course_id
             )
             db.add(certificate)
+            db.flush()  # get certificate.id before generating the PDF
+
+            certificate.certificate_url = generate_certificate_pdf(
+                learner_name=enrollment.user.name,
+                course_title=enrollment.course.title,
+                issued_at=certificate.issued_at or datetime.now(timezone.utc),
+                certificate_id=certificate.id,
+                user_id=enrollment.user_id,
+                course_id=enrollment.course_id
+            )
 
     elif completed_lessons > 0:
         enrollment.status = EnrollmentStatusEnum.in_progress

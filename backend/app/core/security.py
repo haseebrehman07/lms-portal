@@ -19,12 +19,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def verify_password_constant_time(plain_password: str, hashed_password: Optional[str]) -> bool:
+def verify_password_constant_time(
+    plain_password: str,
+    hashed_password: Optional[str]
+) -> bool:
     """
-    Always performs a real bcrypt verification, even when hashed_password
-    is None (falls back to a dummy hash). This keeps login response time
-    consistent whether or not the account exists, so an attacker can't
-    tell real accounts from non-existent ones by measuring response time.
+    Always performs a real bcrypt verification even when hashed_password
+    is None. Falls back to a precomputed dummy hash so response time is
+    identical whether the account exists or not. This prevents an attacker
+    from discovering valid email addresses by measuring response speed.
     """
     return pwd_context.verify(plain_password, hashed_password or _DUMMY_HASH)
 
