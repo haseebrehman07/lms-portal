@@ -118,26 +118,28 @@ const StudentCourses = () => {
   const loadCourseDetails = async (course) => {
     setLoadingDetailsId(course.id);
     try {
-      // Fetch both the details (for progress/locks) AND the module structure
       const [detailRes, modulesRes] = await Promise.all([
-        api.get(`/courses/${course.id}/detail`),
-        api.get(`/courses/${course.id}/modules`).catch(() => ({ data: [] })) // Failsafe
+        api.get(`/courses/${course.id}/detail`).catch(() => ({ data: {} })),
+        api.get(`/courses/${course.id}/modules`).catch(() => ({ data: [] }))
       ]);
       
-      const detailData = detailRes.data;
-      const modulesData = modulesRes.data;
+      const detailData = detailRes.data || {};
+      const modulesData = Array.isArray(modulesRes.data) ? modulesRes.data : [];
+      const safeLessons = detailData.lessons || [];
 
-      const alreadyCompleted = detailData.lessons
+      const alreadyCompleted = safeLessons
         .filter(lesson => lesson.is_completed)
         .map(lesson => lesson.id);
+      
       setCompletedItems(alreadyCompleted);
       setExpandedItems([]);
 
       let foundQuiz = null;
-      
-      // Create a quick lookup map for the detailed lesson states
       const detailLessonsMap = {};
-      detailData.lessons.forEach(l => {
+      
+      // Build a lookup map from the detail endpoint
+      safeLessons.forEach(l => {
+        if (!l) return;
         if (l.lesson_type === 'quiz') {
           foundQuiz = {
             id: l.id,
@@ -150,29 +152,48 @@ const StudentCourses = () => {
         }
       });
 
-      // Map the modules (weeks) into the UI structure
+      // Map the modules, utilizing raw module data if the detail map is missing it
       const structuredWeeks = modulesData.map(mod => {
-        const materials = mod.lessons.map(rawLesson => {
-          const detailLesson = detailLessonsMap[rawLesson.id];
-          if (!detailLesson) return null; // Skip if it's a quiz or missing
+        if (!mod) return null;
+
+        const modLessons = mod.lessons || [];
+        const materials = modLessons.map(rawLesson => {
+          if (!rawLesson) return null;
+
+          // Handle Quizzes gracefully
+          if (rawLesson.lesson_type === 'quiz') {
+            if (!foundQuiz) {
+              foundQuiz = {
+                id: rawLesson.id,
+                title: rawLesson.title,
+                isLocked: course.enrollmentStatus !== 'enrolled',
+                questions: []
+              };
+            }
+            return null; // Skip rendering quiz inside the standard materials array
+          }
           
+          const detailLesson = detailLessonsMap[rawLesson.id];
+          
+          // Bulletproof Mapping: If detailLesson is missing, fallback to rawLesson 
+          // and assume unlocked ONLY if the student is actively enrolled.
           return {
-            id: detailLesson.id,
-            title: detailLesson.title,
-            type: detailLesson.lesson_type === 'pdf' ? 'pdf' : 'video',
-            url: detailLesson.pdf_url || detailLesson.video_url || null,
-            thumbnailUrl: detailLesson.thumbnail_url || null, // NEW: Individual lesson thumbnail
-            isLocked: detailLesson.is_locked,
-            duration: detailLesson.duration_seconds
+            id: rawLesson.id,
+            title: detailLesson?.title || rawLesson.title || 'Untitled Lesson',
+            type: detailLesson?.lesson_type === 'pdf' || rawLesson.lesson_type === 'pdf' ? 'pdf' : 'video',
+            url: detailLesson?.pdf_url || detailLesson?.video_url || rawLesson.pdf_url || rawLesson.video_url || null,
+            thumbnailUrl: detailLesson?.thumbnail_url || rawLesson.thumbnail_url || null, 
+            isLocked: detailLesson ? detailLesson.is_locked : (course.enrollmentStatus !== 'enrolled'),
+            duration: detailLesson?.duration_seconds || rawLesson.duration_seconds || 0
           };
-        }).filter(Boolean); // Remove nulls
+        }).filter(Boolean); // Strip out nulls
 
         return {
           id: mod.id,
           title: mod.title,
           materials: materials
         };
-      });
+      }).filter(Boolean); // Strip out null modules
 
       setActiveCourse({
         ...course,

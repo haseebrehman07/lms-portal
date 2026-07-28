@@ -69,7 +69,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
               type: lesson.lesson_type === 'pdf' ? 'document' : lesson.lesson_type, 
               video_url: lesson.video_url || '',
               pdf_url: lesson.pdf_url || '',
-              thumbnail_url: lesson.thumbnail_url || '', // Fetch existing thumbnail
+              thumbnail_url: lesson.thumbnail_url || '', 
               content: lesson.content || '',
               duration_seconds: lesson.duration_seconds || 0,
               quiz_data: quizData
@@ -159,7 +159,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       let endpoint = '';
       if (uploadType === 'video') endpoint = '/uploads/video';
       else if (uploadType === 'document') endpoint = '/uploads/pdf';
-      else endpoint = '/uploads/thumbnail'; // New endpoint for the image
+      else endpoint = '/uploads/thumbnail'; 
 
       const res = await api.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -212,9 +212,9 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       type: lessonForm.type,
       video_url: lessonForm.videoUrl,
       pdf_url: lessonForm.pdfUrl,
-      thumbnail_url: lessonForm.thumbnailUrl, // Attached to temporary lesson data
+      thumbnail_url: lessonForm.thumbnailUrl, 
       content: lessonForm.content,
-      duration_seconds: 0, // In a real app, you'd extract video metadata here
+      duration_seconds: 0, 
       quiz_data: lessonForm.type === 'quiz' ? {
         passing_score: lessonForm.quizPassingScore,
         questions: lessonForm.questions
@@ -287,7 +287,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
               order_index: lessonIndex,
               video_url: lesson.video_url || null,
               pdf_url: lesson.pdf_url || null,
-              thumbnail_url: lesson.thumbnail_url || null, // Sent to backend
+              thumbnail_url: lesson.thumbnail_url || null, 
               content: lesson.content || null,
               duration_seconds: 0
             });
@@ -311,7 +311,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
                 order_index: lessonIndex,
                 video_url: lesson.video_url || null,
                 pdf_url: lesson.pdf_url || null,
-                thumbnail_url: lesson.thumbnail_url || null, // Sent to backend
+                thumbnail_url: lesson.thumbnail_url || null, 
                 content: lesson.content || null
               });
             } catch (err) {
@@ -396,7 +396,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
                 </button>
               </div>
 
-              {/* UPDATED: Cinematic 16:9 Lesson Rendering */}
+              {/* Cinematic 16:9 Lesson Rendering */}
               <div className="px-4 py-2 space-y-2">
                 {week.lessons.map((lesson) => (
                   <div key={lesson.id} className="flex gap-4 p-2 rounded-xl transition-colors hover:bg-gray-50 group border border-transparent hover:border-gray-100">
@@ -548,25 +548,40 @@ const AdminCourseBuilder = ({ course, onBack }) => {
                     </label>
                   </div>
                   
-                  {/* Thumbnail Cover */}
+                  {/* NEW Thumbnail Cover Logic */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Cover Thumbnail (16:9)</label>
-                    <label className={`relative overflow-hidden flex flex-col items-center justify-center p-4 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.thumbnailUrl ? 'border-blue-300 bg-black' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
+                    <div className={`relative overflow-hidden flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-lg transition-colors ${lessonForm.thumbnailUrl ? 'border-blue-300 bg-black' : 'border-gray-300 bg-gray-50'}`}>
+                      
                       {lessonForm.thumbnailUrl ? (
-                        <>
-                          <img src={lessonForm.thumbnailUrl} alt="Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-60" />
-                          <span className="relative z-10 text-white text-xs font-bold bg-black/50 px-2 py-1 rounded">Change Cover</span>
-                        </>
+                        <div className="w-full h-full relative group">
+                          <img src={lessonForm.thumbnailUrl} alt="Thumbnail" className="w-full h-full object-cover opacity-60" />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                            <label className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-colors shadow-sm" title="Change Thumbnail">
+                              <Edit2 className="w-4 h-4" />
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'thumbnail')} disabled={isUploading} />
+                            </label>
+                            <button 
+                              type="button"
+                              onClick={() => setLessonForm({ ...lessonForm, thumbnailUrl: '' })}
+                              className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg cursor-pointer transition-colors shadow-sm"
+                              title="Remove Thumbnail"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <>
+                        <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 transition-colors p-4">
                           {isUploading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <ImageIcon className="w-6 h-6 mb-2 text-gray-400" />}
                           <span className="text-xs font-medium text-center text-gray-600">
                             {isUploading ? 'Uploading...' : 'Upload Image'}
                           </span>
-                        </>
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'thumbnail')} disabled={isUploading} />
+                        </label>
                       )}
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'thumbnail')} disabled={isUploading} />
-                    </label>
+
+                    </div>
                   </div>
                 </div>
               )}
