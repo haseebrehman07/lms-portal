@@ -302,7 +302,7 @@ def update_user(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT
 )
-def deactivate_user(
+def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     admin=Depends(require_admin)
@@ -316,7 +316,9 @@ def deactivate_user(
     if str(user.id) == str(admin.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot deactivate your own account"
+            detail="You cannot delete your own account"
         )
-    user.is_active = False
+    
+    # Hard delete the user from the database
+    db.delete(user)
     db.commit()
