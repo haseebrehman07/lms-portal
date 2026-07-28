@@ -2,8 +2,6 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.enrollment import Enrollment, LessonProgress, EnrollmentStatusEnum
 from app.models.lesson import Lesson
-from app.models.certificate import Certificate
-from app.services.certificate_pdf import generate_certificate_pdf
 
 
 def recalculate_progress(enrollment_id, db: Session):
@@ -28,36 +26,20 @@ def recalculate_progress(enrollment_id, db: Session):
     progress = (completed_lessons / total_lessons) * 100
     enrollment.progress_percent = round(progress, 1)
 
-    if completed_lessons == total_lessons:
-        enrollment.status = EnrollmentStatusEnum.completed
-        enrollment.completed_at = datetime.now(timezone.utc)
-
-        existing_cert = db.query(Certificate).filter(
-            Certificate.user_id == enrollment.user_id,
-            Certificate.course_id == enrollment.course_id
-        ).first()
-
-        if not existing_cert:
-            certificate = Certificate(
-                user_id=enrollment.user_id,
-                course_id=enrollment.course_id
-            )
-            db.add(certificate)
-            db.flush()  # get certificate.id before generating the PDF
-
-            certificate.certificate_url = generate_certificate_pdf(
-                learner_name=enrollment.user.name,
-                course_title=enrollment.course.title,
-                issued_at=certificate.issued_at or datetime.now(timezone.utc),
-                certificate_id=certificate.id,
-                user_id=enrollment.user_id,
-                course_id=enrollment.course_id
-            )
-
-    elif completed_lessons > 0:
-        enrollment.status = EnrollmentStatusEnum.in_progress
-    else:
-        enrollment.status = EnrollmentStatusEnum.not_started
+    # Status is intentionally NOT auto-set to 'completed' here, even at
+    # 100% progress. Completion (and certificate issuance) only happens
+    # when an admin explicitly ends the course session via
+    # POST /courses/{id}/toggle-completion. Reaching 100% on your own
+    # does not earn a certificate.
+    #
+    # If an admin has already marked this enrollment completed, don't
+    # let a later progress recalculation silently downgrade it back to
+    # in_progress/not_started.
+    if enrollment.status != EnrollmentStatusEnum.completed:
+        if completed_lessons > 0:
+            enrollment.status = EnrollmentStatusEnum.in_progress
+        else:
+            enrollment.status = EnrollmentStatusEnum.not_started
 
     db.commit()
 
