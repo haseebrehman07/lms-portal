@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Video, FileText, HelpCircle, Trash2, Edit2, GripVertical, Check, Upload, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Video, FileText, HelpCircle, Trash2, Edit2, GripVertical, Check, Upload, Loader2, PlayCircle, Image as ImageIcon } from 'lucide-react';
 import api from '../../api/axiosConfig';
+
+// Helper to format raw seconds into standard MM:SS display
+const formatDuration = (seconds) => {
+  if (!seconds) return '—';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
 
 const AdminCourseBuilder = ({ course, onBack }) => {
   // --- STATE ---
   const [weeks, setWeeks] = useState([]);
-  const [isInitialLoading, setIsInitialLoading] = useState(true); // Loading state for fetch
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   
   const [isWeekModalOpen, setIsWeekModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
@@ -20,6 +28,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
     type: 'video',
     videoUrl: '',
     pdfUrl: '',
+    thumbnailUrl: '', // NEW: Lesson Thumbnail State
     content: '', 
     quizPassingScore: 70,
     questions: [
@@ -36,15 +45,11 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       setIsInitialLoading(true);
 
       try {
-        // 1. Fetch modules (weeks) and their nested lessons
         const res = await api.get(`/courses/${course.id}/modules`);
         const modulesData = res.data;
 
-        // 2. Map backend data structure to frontend state structure
         const loadedWeeks = await Promise.all(modulesData.map(async (mod) => {
-          
           const loadedLessons = await Promise.all((mod.lessons || []).map(async (lesson) => {
-            // If it's a quiz, fetch the specific quiz questions
             let quizData = null;
             if (lesson.lesson_type === 'quiz') {
               try {
@@ -61,11 +66,12 @@ const AdminCourseBuilder = ({ course, onBack }) => {
             return {
               id: lesson.id,
               title: lesson.title,
-              // Map backend 'pdf' to frontend 'document'
               type: lesson.lesson_type === 'pdf' ? 'document' : lesson.lesson_type, 
               video_url: lesson.video_url || '',
               pdf_url: lesson.pdf_url || '',
+              thumbnail_url: lesson.thumbnail_url || '', // Fetch existing thumbnail
               content: lesson.content || '',
+              duration_seconds: lesson.duration_seconds || 0,
               quiz_data: quizData
             };
           }));
@@ -110,6 +116,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       type: 'video', 
       videoUrl: '', 
       pdfUrl: '', 
+      thumbnailUrl: '',
       content: '',
       quizPassingScore: 70,
       questions: [{ question: '', options: ['', '', '', ''], correct_option: 0 }] 
@@ -126,6 +133,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       type: lesson.type || 'video',
       videoUrl: lesson.video_url || '',
       pdfUrl: lesson.pdf_url || '',
+      thumbnailUrl: lesson.thumbnail_url || '',
       content: lesson.content || '',
       quizPassingScore: lesson.quiz_data?.passing_score || 70,
       questions: lesson.quiz_data?.questions || [{ question: '', options: ['', '', '', ''], correct_option: 0 }]
@@ -148,15 +156,21 @@ const AdminCourseBuilder = ({ course, onBack }) => {
     formData.append('file', file);
 
     try {
-      const endpoint = uploadType === 'video' ? '/uploads/video' : '/uploads/pdf';
+      let endpoint = '';
+      if (uploadType === 'video') endpoint = '/uploads/video';
+      else if (uploadType === 'document') endpoint = '/uploads/pdf';
+      else endpoint = '/uploads/thumbnail'; // New endpoint for the image
+
       const res = await api.post(endpoint, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
       if (uploadType === 'video') {
         setLessonForm(prev => ({ ...prev, videoUrl: res.data.url }));
-      } else {
+      } else if (uploadType === 'document') {
         setLessonForm(prev => ({ ...prev, pdfUrl: res.data.url }));
+      } else {
+        setLessonForm(prev => ({ ...prev, thumbnailUrl: res.data.url }));
       }
     } catch (error) {
       alert(error.response?.data?.detail || 'Upload failed. Check file size and type.');
@@ -198,7 +212,9 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       type: lessonForm.type,
       video_url: lessonForm.videoUrl,
       pdf_url: lessonForm.pdfUrl,
+      thumbnail_url: lessonForm.thumbnailUrl, // Attached to temporary lesson data
       content: lessonForm.content,
+      duration_seconds: 0, // In a real app, you'd extract video metadata here
       quiz_data: lessonForm.type === 'quiz' ? {
         passing_score: lessonForm.quizPassingScore,
         questions: lessonForm.questions
@@ -227,7 +243,6 @@ const AdminCourseBuilder = ({ course, onBack }) => {
   };
 
   // --- SAVE CONTENT TO DB ---
-// --- SAVE CONTENT TO DB ---
   const handleSaveCurriculum = async () => {
     if (weeks.length === 0) {
       alert('Please add at least one week before saving.');
@@ -243,21 +258,19 @@ const AdminCourseBuilder = ({ course, onBack }) => {
 
         // 1. MODULE SAVING LOGIC
         if (week.id.toString().startsWith('temp-')) {
-          // This is a NEW week -> Create it
           const moduleRes = await api.post(`/courses/${course.id}/modules`, {
             title: week.title,
             order_index: weekIndex
           });
           moduleId = moduleRes.data.id;
         } else {
-          // This is an EXISTING week -> Update it
           try {
             await api.patch(`/modules/${moduleId}`, {
               title: week.title,
               order_index: weekIndex
             });
           } catch (err) {
-            console.warn("Update module failed. Ensure your backend has a PATCH /modules/{id} route.");
+            console.warn("Update module failed.");
           }
         }
 
@@ -267,7 +280,6 @@ const AdminCourseBuilder = ({ course, onBack }) => {
           const lessonType = lesson.type === 'document' ? 'pdf' : lesson.type;
 
           if (lesson.id.toString().startsWith('temp-')) {
-            // This is a NEW lesson -> Create it
             const lessonRes = await api.post(`/courses/${course.id}/lessons`, {
               title: lesson.title,
               lesson_type: lessonType,
@@ -275,12 +287,12 @@ const AdminCourseBuilder = ({ course, onBack }) => {
               order_index: lessonIndex,
               video_url: lesson.video_url || null,
               pdf_url: lesson.pdf_url || null,
+              thumbnail_url: lesson.thumbnail_url || null, // Sent to backend
               content: lesson.content || null,
               duration_seconds: 0
             });
             const lessonId = lessonRes.data.id;
 
-            // Create Quiz Data if it is a new quiz
             if (lessonType === 'quiz' && lesson.quiz_data) {
               await api.post(`/lessons/${lessonId}/quiz`, {
                 title: `${lesson.title} Quiz`,
@@ -293,20 +305,17 @@ const AdminCourseBuilder = ({ course, onBack }) => {
               });
             }
           } else {
-            // This is an EXISTING lesson -> Update it
             try {
               await api.patch(`/lessons/${lesson.id}`, {
                 title: lesson.title,
                 order_index: lessonIndex,
                 video_url: lesson.video_url || null,
                 pdf_url: lesson.pdf_url || null,
+                thumbnail_url: lesson.thumbnail_url || null, // Sent to backend
                 content: lesson.content || null
               });
-              
-              // Note: We intentionally skip re-posting existing quizzes here 
-              // because your quizzes.py strictly forbids creating a quiz if one already exists.
             } catch (err) {
-              console.warn("Update lesson failed. Ensure your backend has a PATCH /lessons/{id} route.");
+              console.warn("Update lesson failed.");
             }
           }
         }
@@ -322,7 +331,7 @@ const AdminCourseBuilder = ({ course, onBack }) => {
       setIsSaving(false);
     }
   };
-  // Loading Screen
+
   if (isInitialLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 text-gray-400">
@@ -387,22 +396,54 @@ const AdminCourseBuilder = ({ course, onBack }) => {
                 </button>
               </div>
 
-              <div className="p-4 space-y-2">
+              {/* UPDATED: Cinematic 16:9 Lesson Rendering */}
+              <div className="px-4 py-2 space-y-2">
                 {week.lessons.map((lesson) => (
-                  <div key={lesson.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg hover:border-gray-300 transition-colors group">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${lesson.type === 'video' ? 'bg-blue-50 text-blue-500' : lesson.type === 'quiz' ? 'bg-emerald-50 text-emerald-500' : 'bg-orange-50 text-orange-500'}`}>
-                        {lesson.type === 'video' ? <Video className="w-4 h-4" /> : lesson.type === 'quiz' ? <HelpCircle className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                  <div key={lesson.id} className="flex gap-4 p-2 rounded-xl transition-colors hover:bg-gray-50 group border border-transparent hover:border-gray-100">
+                    
+                    {/* Thumbnail Section */}
+                    <div className="relative w-32 sm:w-40 aspect-video bg-gray-900 rounded-lg overflow-hidden shrink-0 shadow-sm flex items-center justify-center">
+                      {(lesson.thumbnail_url || course.thumbnail_url) ? (
+                        <img 
+                          src={lesson.thumbnail_url || course.thumbnail_url} 
+                          alt={lesson.title} 
+                          className="w-full h-full object-cover opacity-70 group-hover:scale-105 transition-transform duration-500" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900"></div>
+                      )}
+                      
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        {lesson.type === 'video' ? <PlayCircle className="w-8 h-8 text-white drop-shadow-lg" /> : 
+                         lesson.type === 'quiz' ? <HelpCircle className="w-8 h-8 text-white drop-shadow-lg" /> : 
+                         <FileText className="w-8 h-8 text-white drop-shadow-lg" />}
                       </div>
-                      <span className="font-medium text-gray-700">{lesson.title}</span>
+
+                      <div className="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wider backdrop-blur-sm">
+                        {lesson.type === 'video' ? formatDuration(lesson.duration_seconds) : lesson.type === 'quiz' ? 'QUIZ' : 'PDF'}
+                      </div>
                     </div>
                     
-                    <button 
-                      onClick={() => handleEditLesson(week.id, lesson)} 
-                      className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer p-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    {/* Text Data Section */}
+                    <div className="flex flex-col py-1 flex-1 min-w-0">
+                      <h3 className="text-base font-bold text-gray-900 leading-snug truncate pr-4">
+                        {lesson.title}
+                      </h3>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 font-medium capitalize">
+                        <span>{lesson.type === 'document' ? 'PDF Material' : lesson.type} Lesson</span>
+                      </div>
+                    </div>
+                    
+                    {/* Edit Button */}
+                    <div className="flex items-center justify-center pr-2">
+                      <button 
+                        onClick={() => handleEditLesson(week.id, lesson)} 
+                        className="p-2.5 text-gray-400 bg-white border border-gray-200 rounded-lg hover:text-blue-600 hover:border-blue-300 transition-colors shadow-sm cursor-pointer"
+                        title="Edit Lesson"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    </div>
                     
                   </div>
                 ))}
@@ -492,17 +533,39 @@ const AdminCourseBuilder = ({ course, onBack }) => {
                 />
               </div>
 
-              {/* VIDEO UPLOAD */}
+              {/* VIDEO UPLOAD & THUMBNAIL (Split UI for Video) */}
               {lessonForm.type === 'video' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Video File (MP4, WebM)</label>
-                  <div className="flex items-center gap-4">
-                    <label className={`flex-1 flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.videoUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
-                      {isUploading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Upload className={`w-5 h-5 ${lessonForm.videoUrl ? 'text-green-600' : 'text-gray-400'}`} />}
-                      <span className={`text-sm font-medium ${lessonForm.videoUrl ? 'text-green-700' : 'text-gray-600'}`}>
-                        {isUploading ? 'Uploading...' : lessonForm.videoUrl ? 'Video Uploaded Successfully (Click to Replace)' : 'Click to Upload Video'}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Video File */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Video File</label>
+                    <label className={`flex flex-col items-center justify-center p-4 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.videoUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
+                      {isUploading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <Upload className={`w-6 h-6 mb-2 ${lessonForm.videoUrl ? 'text-green-600' : 'text-gray-400'}`} />}
+                      <span className={`text-xs font-medium text-center px-2 ${lessonForm.videoUrl ? 'text-green-700' : 'text-gray-600'}`}>
+                        {isUploading ? 'Uploading...' : lessonForm.videoUrl ? 'Video Ready' : 'Upload MP4 / WebM'}
                       </span>
                       <input type="file" accept="video/mp4,video/webm,video/ogg" className="hidden" onChange={(e) => handleFileUpload(e, 'video')} disabled={isUploading} />
+                    </label>
+                  </div>
+                  
+                  {/* Thumbnail Cover */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cover Thumbnail (16:9)</label>
+                    <label className={`relative overflow-hidden flex flex-col items-center justify-center p-4 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.thumbnailUrl ? 'border-blue-300 bg-black' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
+                      {lessonForm.thumbnailUrl ? (
+                        <>
+                          <img src={lessonForm.thumbnailUrl} alt="Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                          <span className="relative z-10 text-white text-xs font-bold bg-black/50 px-2 py-1 rounded">Change Cover</span>
+                        </>
+                      ) : (
+                        <>
+                          {isUploading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <ImageIcon className="w-6 h-6 mb-2 text-gray-400" />}
+                          <span className="text-xs font-medium text-center text-gray-600">
+                            {isUploading ? 'Uploading...' : 'Upload Image'}
+                          </span>
+                        </>
+                      )}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'thumbnail')} disabled={isUploading} />
                     </label>
                   </div>
                 </div>
@@ -512,8 +575,8 @@ const AdminCourseBuilder = ({ course, onBack }) => {
               {lessonForm.type === 'document' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">PDF Document</label>
-                  <label className={`flex-1 flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.pdfUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
-                    {isUploading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Upload className={`w-5 h-5 ${lessonForm.pdfUrl ? 'text-green-600' : 'text-gray-400'}`} />}
+                  <label className={`flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${lessonForm.pdfUrl ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 bg-gray-50'}`}>
+                    {isUploading ? <Loader2 className="w-6 h-6 animate-spin text-blue-600" /> : <FileText className={`w-8 h-8 ${lessonForm.pdfUrl ? 'text-green-600' : 'text-gray-400'}`} />}
                     <span className={`text-sm font-medium ${lessonForm.pdfUrl ? 'text-green-700' : 'text-gray-600'}`}>
                       {isUploading ? 'Uploading...' : lessonForm.pdfUrl ? 'PDF Uploaded Successfully (Click to Replace)' : 'Click to Upload PDF'}
                     </span>

@@ -20,10 +20,8 @@ const AdminCoursesTab = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   
-  // Added 'id' and 'is_published' to track the exact course state securely
   const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false });
 
-  // 1. FETCH COURSES ON LOAD
   const fetchCourses = async () => {
     try {
       const response = await api.get('/courses');
@@ -37,7 +35,6 @@ const AdminCoursesTab = () => {
     fetchCourses();
   }, []);
 
-  // Timer logic for delete confirmation
   useEffect(() => {
     let timer;
     if (isConfirmingDelete && deleteCountdown > 0) {
@@ -86,7 +83,7 @@ const AdminCoursesTab = () => {
     setCroppedAreaPixels(croppedAreaPixels);
   };
 
-const handleCropAndUpload = async () => {
+  const handleCropAndUpload = async () => {
     setIsUploading(true);
     try {
       const croppedImageFile = await getCroppedImg(rawImage, croppedAreaPixels);
@@ -94,12 +91,10 @@ const handleCropAndUpload = async () => {
       const uploadData = new FormData();
       uploadData.append('file', croppedImageFile);
 
-      // CHANGED: Match the FastAPI backend route
       const res = await api.post('/uploads/thumbnail', uploadData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      // The backend returns a JSON object containing "url"
       setFormData({ ...formData, thumbnailUrl: res.data.url });
       setRawImage(null); 
     } catch (error) {
@@ -149,7 +144,6 @@ const handleCropAndUpload = async () => {
     }
   };
 
-  // --- PUBLISH COURSE LOGIC ---
   const handlePublish = async () => {
     if (!formData.id) return;
     try {
@@ -186,9 +180,9 @@ const handleCropAndUpload = async () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-6">
         {courses.map((course) => (
-          <div key={course.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group hover:border-blue-300 transition-colors cursor-pointer">
+          <div key={course.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group hover:border-blue-300 transition-colors cursor-pointer flex flex-col">
             
-            {/* Draft / Published Badge */}
+            {/* Badge */}
             <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold z-10 shadow-sm border ${course.is_published ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
               {course.is_published ? 'Published' : 'Draft'}
             </div>
@@ -199,41 +193,30 @@ const handleCropAndUpload = async () => {
             >
               <Settings className="w-5 h-5" />
             </button>
-            <div className="aspect-[4/5] bg-gray-100 flex items-center justify-center border-b border-gray-200">
-              <div className="aspect-[4/5] bg-gray-100 flex items-center justify-center border-b border-gray-200 overflow-hidden w-full">
-                {course.thumbnail_url ? (
-                  <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover" />
-                ) : (
-                  <BookOpen className="w-10 h-10 text-gray-300" />
-                )}
+            
+            {/* Same 4:5 Aspect Ratio as Student portal */}
+            <div className="aspect-[4/5] bg-gray-50 flex items-center justify-center border-b border-gray-100 relative overflow-hidden">
+              {course.thumbnail_url ? (
+                <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+              ) : (
+                <BookOpen className="w-12 h-12 text-gray-300" />
+              )}
+            </div>
+
+            <div className="p-4 flex flex-col flex-1">
+              <h3 className="font-bold text-base text-gray-900 mb-1 line-clamp-2 leading-snug">{course.title}</h3>
+              <p className="text-xs text-gray-500 font-medium mb-4">Instructor: {course.instructor_name || 'TBA'}</p>
+              
+              <div className="mt-auto">
+                <button 
+                  onClick={() => setEditingCourse(course)}
+                  className="w-full py-2 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm hover:bg-blue-600 hover:text-white transition-all duration-300 cursor-pointer"
+                >
+                  Edit Curriculum
+                </button>
               </div>
             </div>
-            <div className="p-5 flex flex-col h-[220px]">
-              <h3 className="font-bold text-lg text-gray-900 mb-3 pr-8 truncate">{course.title}</h3>
-              <div className="space-y-2 text-sm text-gray-600 flex-1">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate">{course.instructor_name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate">{course.timings}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="truncate">
-                    {course.start_date ? new Date(course.start_date).toLocaleDateString() : 'TBD'} - 
-                    {course.end_date ? new Date(course.end_date).toLocaleDateString() : 'TBD'}
-                  </span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setEditingCourse(course)}
-                className="w-full py-2 bg-blue-50 text-blue-700 rounded-lg font-bold text-sm hover:bg-blue-600 hover:text-white transition-colors mt-4 cursor-pointer shrink-0"
-              >
-                Edit Curriculum
-              </button>
-            </div>
+
           </div>
         ))}
       </div>
@@ -320,7 +303,7 @@ const handleCropAndUpload = async () => {
                           <button
                             type="button"
                             onClick={() => setRawImage(null)}
-                            className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition-colors"
+                            className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition-colors cursor-pointer"
                           >
                             Cancel
                           </button>
@@ -328,7 +311,7 @@ const handleCropAndUpload = async () => {
                             type="button"
                             onClick={handleCropAndUpload}
                             disabled={isUploading}
-                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors disabled:bg-blue-400"
+                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer disabled:bg-blue-400"
                           >
                             {isUploading ? 'Saving...' : 'Crop & Save'}
                           </button>
@@ -435,7 +418,6 @@ const handleCropAndUpload = async () => {
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
                   
-                  {/* Left Side Buttons (Delete & Publish) */}
                   <div className="flex gap-3">
                     {formData.id && (
                       <button 
@@ -456,7 +438,6 @@ const handleCropAndUpload = async () => {
                     )}
                   </div>
                   
-                  {/* Right Side Buttons (Cancel & Save) */}
                   <div className="flex gap-3">
                     <button 
                       onClick={closeModal}

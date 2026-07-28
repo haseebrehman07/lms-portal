@@ -161,7 +161,7 @@ const StudentDashboard = () => {
         {/* Upcoming Deadlines / Announcements */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-900">Announcements</h3>
+            <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
             <button onClick={() => navigate('/student/deadlines')} className="text-sm text-blue-600 font-medium hover:underline">
               View all
             </button>
