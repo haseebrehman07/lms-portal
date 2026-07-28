@@ -136,6 +136,7 @@ def get_course_detail(
             "order_index": lesson.order_index,
             "duration_seconds": lesson.duration_seconds,
             "video_url": lesson.video_url if unlocked else None,
+            "thumbnail_url": getattr(lesson, "thumbnail_url", None),
             "pdf_url": lesson.pdf_url if unlocked else None,
             "content": lesson.content if unlocked else None,
             "is_free_preview": lesson.is_free_preview,
@@ -143,26 +144,6 @@ def get_course_detail(
             "is_completed": progress.is_completed if progress else False,
             "time_spent_seconds": progress.time_spent_seconds if progress else 0
         }
-
-    return {
-        "id": str(course.id),
-        "title": course.title,
-        "description": course.description,
-        "thumbnail_url": course.thumbnail_url,
-        "instructor_name": course.instructor_name,
-        "type": course.type.value if course.type else None,
-        "total_lessons": course.total_lessons,
-        "is_published": course.is_published,
-        "is_enrolled": enrollment is not None,
-        "progress_percent": enrollment.progress_percent if enrollment else 0,
-        "enrollment_status": (
-            enrollment.status.value if enrollment else "not_enrolled"
-        ),
-        "lessons": [lesson_payload(lesson) for lesson in lessons]
-    }
-
-
-@router.get("/{course_id}", response_model=CourseResponse)
 def get_course(
     course_id: UUID,
     db: Session = Depends(get_db),
