@@ -1,3 +1,4 @@
+import calendar
 from datetime import datetime, timedelta, timezone
 import io
 
@@ -28,7 +29,6 @@ def _resolve_period_start(period: str, now: datetime) -> datetime:
         return now - timedelta(days=180)
     if period == "this_year":
         return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    # default / unrecognized period falls back to current_month
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
@@ -158,3 +158,50 @@ def get_report_summary(
         "avg_progress": round(float(avg_progress), 1),
         "active_users": active_users
     }
+
+
+@router.get("/completions")
+def get_monthly_completions(
+    db: Session = Depends(get_db),
+    user=Depends(require_manager_or_admin)
+):
+    """
+    Number of completed courses per month for the current year.
+    Format: [{"name": "Jan", "current": 10}, {"name": "Feb", "current": 15}, ...]
+    """
+    current_year = datetime.now(timezone.utc).year
+
+    completed_enrollments = db.query(Enrollment.completed_at).filter(
+        Enrollment.status == EnrollmentStatusEnum.completed,
+        Enrollment.completed_at.isnot(None)
+    ).all()
+
+    monthly_counts = {month: 0 for month in range(1, 13)}
+    for (completed_date,) in completed_enrollments:
+        if completed_date.year == current_year:
+            monthly_counts[completed_date.month] += 1
+
+    return [
+        {"name": calendar.month_abbr[month], "current": count}
+        for month, count in monthly_counts.items()
+    ]
+
+
+@router.get("/course-performance")
+def get_course_performance(
+    db: Session = Depends(get_db),
+    user=Depends(require_manager_or_admin)
+):
+    """
+    Count of all enrollments grouped by current status.
+    Format: [{"name": "COMPLETED", "value": 25}, ...]
+    """
+    status_counts = db.query(
+        Enrollment.status,
+        func.count(Enrollment.id)
+    ).group_by(Enrollment.status).all()
+
+    return [
+        {"name": status.value.replace("_", " ").upper(), "value": count}
+        for status, count in status_counts
+    ]
