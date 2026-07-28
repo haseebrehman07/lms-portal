@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Settings, X, Upload, Clock, User, BookOpen, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Settings, X, Upload, Clock, User, BookOpen, Calendar, AlertTriangle, CheckCircle, Award, RotateCcw } from 'lucide-react';
 import api from '../../api/axiosConfig'; 
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../../utils/cropUtils';
@@ -20,7 +20,7 @@ const AdminCoursesTab = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   
-  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false });
+  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false });
 
   const fetchCourses = async () => {
     try {
@@ -56,11 +56,12 @@ const AdminCoursesTab = () => {
         startDate: course.start_date || '',
         endDate: course.end_date || '',
         thumbnailUrl: course.thumbnail_url || '',
-        is_published: course.is_published || false
+        is_published: course.is_published || false,
+        is_completed: course.is_completed || false
       });
       setIsModalOpen(true);
     } else {
-      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false });
+      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false });
       setIsModalOpen(true);
     }
   };
@@ -157,6 +158,28 @@ const AdminCoursesTab = () => {
     }
   };
 
+  // --- UPDATED: TOGGLE COMPLETION LOGIC ---
+  const handleToggleCompletion = async () => {
+    if (!formData.id) return;
+    const isCompleting = !formData.is_completed;
+    
+    const confirmMsg = isCompleting 
+      ? "Are you sure you want to end this course? This will automatically mark ALL enrolled students as 'Completed' so they can receive their certificates."
+      : "Are you sure you want to revert this course to Active? This will change all student enrollments back to 'In Progress'.";
+      
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.post(`/courses/${formData.id}/toggle-completion`);
+      alert(`Course and enrollments marked as ${isCompleting ? 'completed' : 'active'}!`);
+      await fetchCourses();
+      closeModal();
+    } catch (error) {
+      console.error("Failed to toggle completion:", error);
+      alert(error.response?.data?.detail || "Failed to update course completion status.");
+    }
+  };
+
   if (editingCourse) {
     return <AdminCourseBuilder course={editingCourse} onBack={() => setEditingCourse(null)} />;
   }
@@ -182,9 +205,13 @@ const AdminCoursesTab = () => {
         {courses.map((course) => (
           <div key={course.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group hover:border-blue-300 transition-colors cursor-pointer flex flex-col">
             
-            {/* Badge */}
-            <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold z-10 shadow-sm border ${course.is_published ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
-              {course.is_published ? 'Published' : 'Draft'}
+            {/* Dynamic Status Badge */}
+            <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold z-10 shadow-sm border ${
+              course.is_completed ? 'bg-purple-100 text-purple-700 border-purple-200' :
+              course.is_published ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
+              'bg-orange-100 text-orange-700 border-orange-200'
+            }`}>
+              {course.is_completed ? 'Completed' : course.is_published ? 'Active' : 'Draft'}
             </div>
 
             <button 
@@ -194,10 +221,9 @@ const AdminCoursesTab = () => {
               <Settings className="w-5 h-5" />
             </button>
             
-            {/* Same 4:5 Aspect Ratio as Student portal */}
             <div className="aspect-[4/5] bg-gray-50 flex items-center justify-center border-b border-gray-100 relative overflow-hidden">
               {course.thumbnail_url ? (
-                <img src={course.thumbnail_url} alt={course.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img src={course.thumbnail_url} alt={course.title} className={`w-full h-full object-cover transition-transform duration-500 ${course.is_completed ? 'opacity-80 grayscale-[20%]' : 'group-hover:scale-105'}`} />
               ) : (
                 <BookOpen className="w-12 h-12 text-gray-300" />
               )}
@@ -227,7 +253,7 @@ const AdminCoursesTab = () => {
             
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-900">
-                {isConfirmingDelete ? 'Confirm Deletion' : formData.title ? 'Edit Course' : 'Create New Course'}
+                {isConfirmingDelete ? 'Confirm Deletion' : formData.title ? 'Edit Course Settings' : 'Create New Course'}
               </h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
                 <X className="w-6 h-6" />
@@ -274,7 +300,6 @@ const AdminCoursesTab = () => {
                 <div className="p-6 flex flex-col md:flex-row gap-8">
                   <div className="w-full md:w-1/3 flex flex-col items-center">
                     {rawImage ? (
-                      // THE CROPPER UI
                       <div className="w-full flex flex-col gap-4 animate-in fade-in duration-200">
                         <div className="relative w-full aspect-[4/5] bg-gray-900 rounded-xl overflow-hidden shadow-inner">
                           <Cropper
@@ -318,7 +343,6 @@ const AdminCoursesTab = () => {
                         </div>
                       </div>
                     ) : (
-                      // THE STANDARD PREVIEW / UPLOAD UI
                       <>
                         <label className="w-full aspect-[4/5] bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-blue-400 transition-colors cursor-pointer group relative overflow-hidden">
                           
@@ -381,7 +405,6 @@ const AdminCoursesTab = () => {
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Start Date */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                             <div className="relative group cursor-pointer">
@@ -397,7 +420,6 @@ const AdminCoursesTab = () => {
                             </div>
                         </div>
 
-                        {/* Finish Date */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Finish Date</label>
                             <div className="relative group cursor-pointer">
@@ -418,22 +440,42 @@ const AdminCoursesTab = () => {
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
                   
+                  {/* Left Side Status Toggles */}
                   <div className="flex gap-3">
                     {formData.id && (
                       <button 
                         onClick={() => setIsConfirmingDelete(true)}
                         className="text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer"
                       >
-                        Delete Course
+                        Delete
                       </button>
                     )}
-                    {formData.id && !formData.is_published && (
+                    {formData.id && !formData.is_published && !formData.is_completed && (
                       <button 
                         onClick={handlePublish}
                         className="text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
                       >
                         <CheckCircle className="w-4 h-4" />
-                        Publish Course
+                        Publish
+                      </button>
+                    )}
+                    {formData.id && formData.is_published && !formData.is_completed && (
+                      <button 
+                        onClick={handleToggleCompletion}
+                        className="text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
+                      >
+                        <Award className="w-4 h-4" />
+                        Mark as Completed
+                      </button>
+                    )}
+                    {/* NEW: Revert to Active button */}
+                    {formData.id && formData.is_completed && (
+                      <button 
+                        onClick={handleToggleCompletion}
+                        className="text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Revert to Active
                       </button>
                     )}
                   </div>

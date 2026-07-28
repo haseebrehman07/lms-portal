@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Clock, ArrowLeft, FileText, Download, FileArchive, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video, Loader2 } from 'lucide-react';
+import { BookOpen, Clock, ArrowLeft, FileText, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video, Loader2 } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const formatDuration = (seconds) => {
@@ -137,7 +137,6 @@ const StudentCourses = () => {
       let foundQuiz = null;
       const detailLessonsMap = {};
       
-      // Build a lookup map from the detail endpoint
       safeLessons.forEach(l => {
         if (!l) return;
         if (l.lesson_type === 'quiz') {
@@ -152,7 +151,6 @@ const StudentCourses = () => {
         }
       });
 
-      // Map the modules, utilizing raw module data if the detail map is missing it
       const structuredWeeks = modulesData.map(mod => {
         if (!mod) return null;
 
@@ -160,7 +158,6 @@ const StudentCourses = () => {
         const materials = modLessons.map(rawLesson => {
           if (!rawLesson) return null;
 
-          // Handle Quizzes gracefully
           if (rawLesson.lesson_type === 'quiz') {
             if (!foundQuiz) {
               foundQuiz = {
@@ -170,13 +167,11 @@ const StudentCourses = () => {
                 questions: []
               };
             }
-            return null; // Skip rendering quiz inside the standard materials array
+            return null; 
           }
           
           const detailLesson = detailLessonsMap[rawLesson.id];
           
-          // Bulletproof Mapping: If detailLesson is missing, fallback to rawLesson 
-          // and assume unlocked ONLY if the student is actively enrolled.
           return {
             id: rawLesson.id,
             title: detailLesson?.title || rawLesson.title || 'Untitled Lesson',
@@ -186,14 +181,14 @@ const StudentCourses = () => {
             isLocked: detailLesson ? detailLesson.is_locked : (course.enrollmentStatus !== 'enrolled'),
             duration: detailLesson?.duration_seconds || rawLesson.duration_seconds || 0
           };
-        }).filter(Boolean); // Strip out nulls
+        }).filter(Boolean); 
 
         return {
           id: mod.id,
           title: mod.title,
           materials: materials
         };
-      }).filter(Boolean); // Strip out null modules
+      }).filter(Boolean); 
 
       setActiveCourse({
         ...course,
@@ -209,23 +204,49 @@ const StudentCourses = () => {
     }
   };
 
+  // --- UPDATED: Toggle allows both complete and incomplete ---
   const toggleCompletion = async (item) => {
     if (item.isLocked) {
       alert("This content is locked until your enrollment is approved.");
       return;
     }
     
-    if (completedItems.includes(item.id) || togglingLessonId === item.id) {
+    // Prevent double clicking while an API call is already running
+    if (togglingLessonId === item.id) {
       return; 
     }
 
     setTogglingLessonId(item.id);
+    const isCurrentlyCompleted = completedItems.includes(item.id);
+
     try {
-      await api.post(`/lessons/${item.id}/complete`);
-      setCompletedItems(prev => [...prev, item.id]);
+      // Hit the respective endpoint based on current state
+      const endpoint = isCurrentlyCompleted 
+        ? `/lessons/${item.id}/incomplete` 
+        : `/lessons/${item.id}/complete`;
+        
+      const res = await api.post(endpoint);
+      
+      // 1. Visually toggle the box
+      if (isCurrentlyCompleted) {
+        setCompletedItems(prev => prev.filter(id => id !== item.id));
+      } else {
+        setCompletedItems(prev => [...prev, item.id]);
+      }
+      
+      // 2. Dynamically update the local progress percentage
+      const newProgress = res.data?.progress_percent;
+      if (newProgress !== undefined) {
+        const roundedProgress = Math.round(newProgress);
+        setActiveCourse(prev => ({ ...prev, progress: roundedProgress }));
+        setAllCourses(prev => prev.map(c => 
+          c.id === activeCourse.id ? { ...c, progress: roundedProgress } : c
+        ));
+      }
+
     } catch (error) {
-      console.error("Failed to complete lesson:", error);
-      alert(error.response?.data?.detail || "Failed to mark lesson complete.");
+      console.error("Failed to toggle lesson completion:", error);
+      alert(error.response?.data?.detail || "Failed to update lesson status.");
     } finally {
       setTogglingLessonId(null);
     }
@@ -287,9 +308,7 @@ const StudentCourses = () => {
     setQuizResult(null);
     setQuizUIState('landing');
     setExpandedItems([]);
-    fetchDashboardData(); 
   };
-
 
   if (isPageLoading) {
     return (
@@ -305,20 +324,22 @@ const StudentCourses = () => {
   }
 
   // ==========================================
-  // VIEW: COURSE CURRICULUM (YouTube Style)
+  // VIEW: COURSE CURRICULUM
   // ==========================================
   if (activeCourse) {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 text-gray-800">
         
         {/* Back Button & Course Header */}
-        <div className="flex items-center gap-4 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
-          <button onClick={resetCourseView} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{activeCourse.title}</h1>
-            <p className="text-sm text-gray-500 font-medium mt-1">Instructor: {activeCourse.instructor}</p>
+        <div className="flex items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="flex items-center gap-4">
+            <button onClick={resetCourseView} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{activeCourse.title}</h1>
+              <p className="text-sm text-gray-500 font-medium mt-1">Instructor: {activeCourse.instructor}</p>
+            </div>
           </div>
         </div>
 
@@ -332,12 +353,10 @@ const StudentCourses = () => {
 
           {activeCourse.weeks?.map((week) => (
             <div key={week.id} className="border-b border-gray-100 last:border-0">
-              {/* Module Header */}
               <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
                 <h2 className="text-lg font-bold text-gray-900">{week.title}</h2>
               </div>
               
-              {/* Media Layout Feed */}
               <div className="px-4 py-2 space-y-2">
                 {week.materials?.length === 0 && (
                   <p className="text-sm text-gray-400 px-2 py-4 italic">No lessons in this module yet.</p>
@@ -345,7 +364,6 @@ const StudentCourses = () => {
                 {week.materials?.map((item) => (
                   <div key={item.id} className="flex flex-col">
                     
-                    {/* Media Row */}
                     <div 
                       className={`flex gap-4 p-2 rounded-xl transition-colors ${item.isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer group'}`}
                       onClick={(e) => {
@@ -353,9 +371,7 @@ const StudentCourses = () => {
                         handleFileClick(e, item);
                       }}
                     >
-                      {/* 16:9 Thumbnail Block */}
                       <div className="relative w-40 sm:w-48 aspect-video bg-gray-900 rounded-xl overflow-hidden shrink-0 shadow-sm">
-                        {/* Prioritize lesson thumbnail, fallback to course thumbnail */}
                         {(item.thumbnailUrl || activeCourse.thumbnailUrl) ? (
                           <img 
                             src={item.thumbnailUrl || activeCourse.thumbnailUrl} 
@@ -379,7 +395,6 @@ const StudentCourses = () => {
                         </div>
                       </div>
 
-                      {/* Text & Metadata Container */}
                       <div className="flex flex-col py-1 flex-1 min-w-0">
                         <h3 className="text-base font-bold text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors pr-4">
                           {item.title}
@@ -395,16 +410,15 @@ const StudentCourses = () => {
                         </div>
                       </div>
 
-                      {/* Right-aligned Checkbox */}
                       <div className="pt-2 pr-2 shrink-0">
                         <button 
-                          className={`checkbox-btn p-2 rounded-full transition-colors ${completedItems.includes(item.id) ? 'text-blue-500' : 'text-gray-400 hover:text-blue-600 hover:bg-gray-200/50'}`}
+                          className={`checkbox-btn p-2 rounded-full transition-colors ${completedItems.includes(item.id) ? 'text-blue-500 hover:bg-blue-50' : 'text-gray-400 hover:text-blue-600 hover:bg-gray-200/50'}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleCompletion(item);
                           }}
-                          disabled={togglingLessonId === item.id || completedItems.includes(item.id)}
-                          title="Mark as completed"
+                          disabled={togglingLessonId === item.id}
+                          title={completedItems.includes(item.id) ? "Mark as incomplete" : "Mark as completed"}
                         >
                           {togglingLessonId === item.id ? (
                             <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -417,7 +431,6 @@ const StudentCourses = () => {
                       </div>
                     </div>
 
-                    {/* Embedded Media Player */}
                     {expandedItems.includes(item.id) && !item.isLocked && item.url && (
                       <div className="mt-3 mb-6 mx-2 rounded-2xl overflow-hidden border border-gray-200 bg-black shadow-lg animate-in slide-in-from-top-2 duration-300">
                         {item.type === 'video' ? (
@@ -447,7 +460,6 @@ const StudentCourses = () => {
             </div>
           ))}
 
-          {/* Assessment Section */}
           {activeCourse.quiz && (
             <div className="border-t-4 border-gray-50 bg-white">
               <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-2">
