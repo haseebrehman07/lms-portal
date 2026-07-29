@@ -8,6 +8,7 @@ from app.models.lesson import LessonTypeEnum
 class LessonCreate(BaseModel):
     title: str
     lesson_type: LessonTypeEnum = LessonTypeEnum.video
+    module_id: UUID
     order_index: int = 0
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None  # add this

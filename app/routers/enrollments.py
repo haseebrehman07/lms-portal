@@ -19,7 +19,6 @@ from app.services.progress import mark_lesson_progress_complete, recalculate_pro
 
 router = APIRouter(tags=["Enrollments"])
 
-
 @router.post(
     "/lessons/{lesson_id}/incomplete",
     status_code=status.HTTP_200_OK
