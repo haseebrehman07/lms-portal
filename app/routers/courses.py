@@ -122,11 +122,6 @@ def get_course_detail(
 
     def lesson_payload(lesson):
         progress = lesson_progress_map.get(str(lesson.id))
-        # Enrolled users and staff see everything. Everyone else only
-        # gets the actual content (video/pdf/text) if this specific
-        # lesson is marked as a free preview - otherwise it's locked,
-        # though the title/type/order still show so they can see the
-        # syllabus before enrolling.
         unlocked = can_see_full_content or lesson.is_free_preview
 
         return {
@@ -144,25 +139,13 @@ def get_course_detail(
             "is_completed": progress.is_completed if progress else False,
             "time_spent_seconds": progress.time_spent_seconds if progress else 0
         }
-def get_course(
-    course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
-):
-    course = db.query(Course).filter(
-        Course.id == course_id
-    ).first()
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    if not course.is_published and not _is_staff(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    return course
+
+    # FIX: We must actually execute the mapper and return the payload to the frontend!
+    return {
+        "id": str(course.id),
+        "title": course.title,
+        "lessons": [lesson_payload(l) for l in lessons]
+    }
 
 
 @router.post(
