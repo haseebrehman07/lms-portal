@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Clock, ArrowLeft, FileText, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Video, Loader2 } from 'lucide-react';
+import { BookOpen, Clock, ArrowLeft, FileText, CheckSquare, Square, PlayCircle, Award, CheckCircle, Lock, Loader2 } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const formatDuration = (seconds) => {
@@ -19,7 +19,6 @@ const StudentCourses = () => {
   const [togglingLessonId, setTogglingLessonId] = useState(null);
   const [expandedItems, setExpandedItems] = useState([]);
 
-  // Quiz States
   const [activeQuiz, setActiveQuiz] = useState(null);
   const [quizUIState, setQuizUIState] = useState('landing');
   const [userAnswers, setUserAnswers] = useState({});
@@ -30,28 +29,26 @@ const StudentCourses = () => {
   const [completedItems, setCompletedItems] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
 
+  // --- UPDATED: Now fetches certificate requests so we know button status ---
   const fetchDashboardData = useCallback(async () => {
     setIsPageLoading(true);
     try {
-      const coursesRes = await api.get('/courses');
+      const [coursesRes, enrollRes, reqRes, certReqRes] = await Promise.all([
+        api.get('/courses'),
+        api.get('/enrollments/me').catch(() => ({ data: [] })),
+        api.get('/enrollment-requests/me').catch(() => ({ data: [] })),
+        api.get('/certificate-requests/me').catch(() => ({ data: [] }))
+      ]);
+
       const realCourses = coursesRes.data;
-
-      let myEnrollments = [];
-      let myRequests = [];
-
-      try {
-        const enrollmentsRes = await api.get('/enrollments/me');
-        myEnrollments = enrollmentsRes.data;
-
-        const requestsRes = await api.get('/enrollment-requests/me');
-        myRequests = requestsRes.data;
-      } catch (enrollErr) {
-        console.warn("Could not fetch personal data. Defaulting to none.", enrollErr);
-      }
+      const myEnrollments = enrollRes.data;
+      const myRequests = reqRes.data;
+      const myCertRequests = certReqRes.data;
 
       const mergedCourses = realCourses.map(course => {
         const enrollment = myEnrollments.find(e => e.course_id === course.id);
         const pendingRequest = myRequests.find(r => r.course_id === course.id && r.status === 'pending');
+        const certReq = myCertRequests.find(r => r.course_id === course.id);
 
         let status = 'none';
         if (enrollment) {
@@ -67,6 +64,7 @@ const StudentCourses = () => {
           endDate: course.end_date || '2099-12-31', 
           enrollmentStatus: status,
           progress: enrollment ? Math.round(enrollment.progress_percent || 0) : 0,
+          certRequestStatus: certReq ? certReq.status : null,
           weeks: [], 
           quiz: null
         };
@@ -103,7 +101,6 @@ const StudentCourses = () => {
     setProcessingCourseId(courseId); 
     try {
       await api.post('/enrollment-requests', { course_id: courseId });
-      
       setAllCourses(allCourses.map(c => 
         c.id === courseId ? { ...c, enrollmentStatus: 'pending' } : c
       ));
@@ -112,6 +109,21 @@ const StudentCourses = () => {
       alert(error.response?.data?.detail || "Failed to send request.");
     } finally {
       setProcessingCourseId(null); 
+    }
+  };
+
+  // --- NEW: Handle Certificate Request ---
+  const handleRequestCertificate = async (courseId) => {
+    try {
+      await api.post('/certificate-requests', { course_id: courseId });
+      alert("Certificate requested successfully! Your instructor will review it shortly.");
+      
+      // Update local state instantly so the button changes to pending
+      setActiveCourse(prev => ({ ...prev, certRequestStatus: 'pending' }));
+      fetchDashboardData(); // Refresh silently in background
+    } catch (error) {
+      console.error("Failed to request certificate:", error);
+      alert(error.response?.data?.detail || "Failed to request certificate.");
     }
   };
 
@@ -190,8 +202,15 @@ const StudentCourses = () => {
         };
       }).filter(Boolean); 
 
+      let totalRenderedLessons = 0;
+      structuredWeeks.forEach(w => { totalRenderedLessons += w.materials.length; });
+      const preciseProgress = totalRenderedLessons > 0 
+        ? Math.round((alreadyCompleted.length / totalRenderedLessons) * 100) 
+        : 0;
+
       setActiveCourse({
         ...course,
+        progress: preciseProgress, 
         weeks: structuredWeeks,
         quiz: foundQuiz
       });
@@ -204,14 +223,12 @@ const StudentCourses = () => {
     }
   };
 
-  // --- UPDATED: Toggle allows both complete and incomplete ---
   const toggleCompletion = async (item) => {
     if (item.isLocked) {
       alert("This content is locked until your enrollment is approved.");
       return;
     }
     
-    // Prevent double clicking while an API call is already running
     if (togglingLessonId === item.id) {
       return; 
     }
@@ -220,33 +237,33 @@ const StudentCourses = () => {
     const isCurrentlyCompleted = completedItems.includes(item.id);
 
     try {
-      // Hit the respective endpoint based on current state
       const endpoint = isCurrentlyCompleted 
         ? `/lessons/${item.id}/incomplete` 
         : `/lessons/${item.id}/complete`;
         
       const res = await api.post(endpoint);
       
-      // 1. Visually toggle the box
-      if (isCurrentlyCompleted) {
-        setCompletedItems(prev => prev.filter(id => id !== item.id));
-      } else {
-        setCompletedItems(prev => [...prev, item.id]);
-      }
+      const newCompletedState = isCurrentlyCompleted 
+        ? completedItems.filter(id => id !== item.id) 
+        : [...completedItems, item.id];
+        
+      setCompletedItems(newCompletedState);
       
-      // 2. Dynamically update the local progress percentage
-      const newProgress = res.data?.progress_percent;
-      if (newProgress !== undefined) {
-        const roundedProgress = Math.round(newProgress);
-        setActiveCourse(prev => ({ ...prev, progress: roundedProgress }));
-        setAllCourses(prev => prev.map(c => 
-          c.id === activeCourse.id ? { ...c, progress: roundedProgress } : c
-        ));
-      }
+      let totalRenderedLessons = 0;
+      activeCourse.weeks.forEach(w => { totalRenderedLessons += w.materials.length; });
+      
+      const calculatedProgress = totalRenderedLessons > 0 
+        ? Math.round((newCompletedState.length / totalRenderedLessons) * 100) 
+        : 0;
+
+      setActiveCourse(prev => ({ ...prev, progress: calculatedProgress }));
+      setAllCourses(prev => prev.map(c => 
+        c.id === activeCourse.id ? { ...c, progress: calculatedProgress } : c
+      ));
 
     } catch (error) {
       console.error("Failed to toggle lesson completion:", error);
-      alert(error.response?.data?.detail || "Failed to update lesson status.");
+      alert(error.response?.data?.detail || "Backend failed to save checkmark. Ensure server is running the latest code.");
     } finally {
       setTogglingLessonId(null);
     }
@@ -302,7 +319,9 @@ const StudentCourses = () => {
     return () => clearInterval(timerId);
   }, [quizUIState, timeLeft]);
 
-  const resetCourseView = () => {
+  const resetCourseView = async () => {
+    setIsPageLoading(true);
+    await fetchDashboardData(); 
     setActiveCourse(null);
     setActiveQuiz(null);
     setQuizResult(null);
@@ -314,7 +333,7 @@ const StudentCourses = () => {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-500">
         <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-        <p className="font-medium">Loading your courses...</p>
+        <p className="font-medium">Syncing course progress...</p>
       </div>
     );
   }
@@ -330,7 +349,7 @@ const StudentCourses = () => {
     return (
       <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 text-gray-800">
         
-        {/* Back Button & Course Header */}
+        {/* Course Header */}
         <div className="flex items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center gap-4">
             <button onClick={resetCourseView} className="p-2 bg-gray-50 hover:bg-blue-50 text-gray-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer">
@@ -341,6 +360,35 @@ const StudentCourses = () => {
               <p className="text-sm text-gray-500 font-medium mt-1">Instructor: {activeCourse.instructor}</p>
             </div>
           </div>
+
+          {/* --- NEW: Progress & Certificate Request Area --- */}
+          <div className="flex flex-col items-end gap-2">
+            <div className="hidden sm:flex flex-col items-end pr-1">
+              <span className="text-2xl font-black text-blue-600">{activeCourse.progress}%</span>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Completed</span>
+            </div>
+
+            {/* Certificate Request Logic */}
+            {activeCourse.progress === 100 && (
+              activeCourse.certRequestStatus === 'pending' ? (
+                <span className="text-xs font-bold text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200 flex items-center gap-1.5 shadow-sm">
+                  <Clock className="w-4 h-4" /> Request Pending
+                </span>
+              ) : activeCourse.certRequestStatus === 'approved' ? (
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-sm">
+                  <Award className="w-4 h-4" /> Certificate Issued
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleRequestCertificate(activeCourse.id)}
+                  className="text-xs font-bold bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Award className="w-4 h-4" /> Request Certificate
+                </button>
+              )
+            )}
+          </div>
+
         </div>
 
         {/* Course Materials Container */}

@@ -15,6 +15,7 @@ import AdminUsersTab from './pages/adminTabs/AdminUsersTab';
 import AdminReportsTab from './pages/adminTabs/AdminReportsTab';
 import AdminScheduleTab from './pages/adminTabs/AdminScheduleTab';
 import AdminCertificatesTab from './pages/adminTabs/AdminCertificatesTab';
+import AdminAttendanceTab from './pages/adminTabs/AdminAttendanceTab';
 
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -100,6 +101,7 @@ function App() {
           <Route path="courses" element={<AdminCoursesTab />} />
           <Route path="enrollments" element={<AdminEnrollmentsTab />} />
           <Route path="announcements" element={<AdminAnnouncementsTab />} />
+          <Route path="attendance" element={<AdminAttendanceTab />} />
           <Route path="users" element={<AdminUsersTab />} />
           <Route path="reports" element={<AdminReportsTab />} />
           <Route path="schedule" element={<AdminScheduleTab />} />

@@ -20,7 +20,8 @@ const AdminCoursesTab = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   
-  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false });
+  // Added attendance_enabled to state
+  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false, attendance_enabled: false });
 
   const fetchCourses = async () => {
     try {
@@ -57,11 +58,12 @@ const AdminCoursesTab = () => {
         endDate: course.end_date || '',
         thumbnailUrl: course.thumbnail_url || '',
         is_published: course.is_published || false,
-        is_completed: course.is_completed || false
+        is_completed: course.is_completed || false,
+        attendance_enabled: course.attendance_enabled || false // Populate from course
       });
       setIsModalOpen(true);
     } else {
-      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false });
+      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false, attendance_enabled: false });
       setIsModalOpen(true);
     }
   };
@@ -108,13 +110,15 @@ const AdminCoursesTab = () => {
 
   const handleSave = async () => {
     setIsLoading(true);
+    // Added attendance_enabled to payload
     const payload = {
       title: formData.title,
       instructor_name: formData.instructor, 
       timings: formData.timings,
       start_date: formData.startDate || null,
       end_date: formData.endDate || null,
-      thumbnail_url: formData.thumbnailUrl
+      thumbnail_url: formData.thumbnailUrl,
+      attendance_enabled: formData.attendance_enabled 
     };
 
     try {
@@ -158,7 +162,6 @@ const AdminCoursesTab = () => {
     }
   };
 
-  // --- UPDATED: TOGGLE COMPLETION LOGIC ---
   const handleToggleCompletion = async () => {
     if (!formData.id) return;
     const isCompleting = !formData.is_completed;
@@ -205,7 +208,6 @@ const AdminCoursesTab = () => {
         {courses.map((course) => (
           <div key={course.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden relative group hover:border-blue-300 transition-colors cursor-pointer flex flex-col">
             
-            {/* Dynamic Status Badge */}
             <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-md text-xs font-bold z-10 shadow-sm border ${
               course.is_completed ? 'bg-purple-100 text-purple-700 border-purple-200' :
               course.is_published ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
@@ -242,7 +244,6 @@ const AdminCoursesTab = () => {
                 </button>
               </div>
             </div>
-
           </div>
         ))}
       </div>
@@ -435,12 +436,27 @@ const AdminCoursesTab = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* NEW: Attendance Tracking Toggle */}
+                    <div className="pt-2">
+                      <label className="flex items-center cursor-pointer gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50 hover:bg-blue-50 transition-colors">
+                        <input 
+                          type="checkbox"
+                          className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                          checked={formData.attendance_enabled}
+                          onChange={(e) => setFormData({...formData, attendance_enabled: e.target.checked})}
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-gray-900">Enable Attendance Tracking</span>
+                          <span className="text-xs text-gray-500 font-medium mt-0.5">Allow students to mark daily presence</span>
+                        </div>
+                      </label>
+                    </div>
+
                   </div>
                 </div>
 
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-                  
-                  {/* Left Side Status Toggles */}
                   <div className="flex gap-3">
                     {formData.id && (
                       <button 
@@ -468,7 +484,6 @@ const AdminCoursesTab = () => {
                         Mark as Completed
                       </button>
                     )}
-                    {/* NEW: Revert to Active button */}
                     {formData.id && formData.is_completed && (
                       <button 
                         onClick={handleToggleCompletion}

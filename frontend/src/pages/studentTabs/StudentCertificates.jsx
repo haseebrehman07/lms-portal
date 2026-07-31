@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Download, ExternalLink } from 'lucide-react';
+import { Loader2, AlertCircle, Download, ExternalLink, Award } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const StudentCertificates = () => {
@@ -11,6 +11,7 @@ const StudentCertificates = () => {
     const fetchCertificates = async () => {
       try {
         setIsLoading(true);
+        // UPDATED ENDPOINT: Matches the new backend route
         const response = await api.get('/certificates/me');
         setCertificates(response.data || []);
       } catch (err) {
@@ -62,20 +63,17 @@ const StudentCertificates = () => {
               className="flex flex-col sm:flex-row items-start sm:items-center bg-white rounded-xl shadow-sm border border-gray-200 p-4 gap-6 hover:border-blue-300 transition-colors"
             >
               
-              {/* Left: Thumbnail (Falls back to placeholder if none provided) */}
-              <div className="w-full sm:w-48 h-32 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                <img 
-                  src={cert.thumbnail || 'https://placehold.co/400x300/e2e8f0/475569?text=Certificate'} 
-                  alt={`${cert.title} Thumbnail`} 
-                  className="w-full h-full object-cover"
-                />
+              {/* Left: Thumbnail Placeholder */}
+              <div className="w-full sm:w-48 h-32 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
+                 <Award className="w-16 h-16 text-gray-300" />
               </div>
 
               {/* Center: Details */}
               <div className="flex-grow w-full">
-                <h2 className="text-lg font-bold text-gray-900">{cert.title || 'Course Completion'}</h2>
+                {/* UPDATED: Maps to course_title from backend */}
+                <h2 className="text-lg font-bold text-gray-900">{cert.course_title || 'Course Completion'}</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Issued by <span className="font-semibold text-gray-800">{cert.issuer || 'Institution'}</span>
+                  Issued by <span className="font-semibold text-gray-800">Tech Titans University</span>
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
                   Date Earned: {cert.issued_at ? new Date(cert.issued_at).toLocaleDateString() : 'N/A'}
@@ -87,7 +85,7 @@ const StudentCertificates = () => {
                 
                 {/* Download Button */}
                 <a 
-                  href={cert.file_url || '#'}
+                  href={cert.certificate_url || '#'}
                   download
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
                 >
@@ -97,7 +95,7 @@ const StudentCertificates = () => {
 
                 {/* View Button */}
                 <a 
-                  href={cert.file_url || '#'}
+                  href={cert.certificate_url || '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"

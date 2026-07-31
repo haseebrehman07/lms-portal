@@ -20,6 +20,8 @@ const Sidebar = ({ role = 'student' }) => {
     { name: 'Users', icon: Users, path: '/admin/users' },
     { name: 'Enrollments', icon: ClipboardCheck, path: '/admin/enrollments' },
     { name: 'Training Schedule', icon: Clock3, path: '/admin/schedule'},
+    // NEW: Admin Attendance Tab added here!
+    { name: 'Attendance', icon: UserCheck, path: '/admin/attendance' },
     { name: 'Reports', icon: FileBarChart, path: '/admin/reports' },
     { name: 'Certificates', icon: Award, path: '/admin/certificates' },
     { name: 'Announcements', icon: Megaphone, path: '/admin/announcements' },
@@ -31,7 +33,7 @@ const Sidebar = ({ role = 'student' }) => {
     { name: 'My courses', icon: BookOpen, path: '/student/courses' },
    // { name: 'Gradebook', icon: CheckSquare, path: '/student/gradebook' },
    // { name: 'Learning', icon: Route, path: '/student/learning' },
-   // { name: 'Attendance', icon: UserCheck, path: '/student/attendance' },
+    { name: 'Attendance', icon: UserCheck, path: '/student/attendance' },
    // { name: 'Calendar', icon: Calendar, path: '/student/timetable' },
     { name: 'Certificates', icon: Award, path: '/student/certificates' },
     { name: 'Notifications', icon: Bell, path: '/student/notifications' },
