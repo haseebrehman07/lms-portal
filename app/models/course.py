@@ -1,3 +1,4 @@
+
 import uuid
 import enum
 from sqlalchemy import (
@@ -49,6 +50,13 @@ class Course(Base):
     instructor_name = Column(String(200), nullable=True)
     total_lessons = Column(Integer, default=0, nullable=False)
     is_published = Column(Boolean, default=False, nullable=False)
+    # Admin's choice, per course: does this course track attendance
+    # (onsite/online sessions) at all? Off by default - most courses
+    # are self-paced and don't need it. Only courses with live/scheduled
+    # sessions (like in-person CHRMP training days) would turn this on.
+    attendance_enabled = Column(
+        Boolean, default=False, server_default='false', nullable=False
+    )
     created_by = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

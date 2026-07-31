@@ -12,6 +12,7 @@ class CourseCreate(BaseModel):
     thumbnail_url: Optional[str] = None
     type: Optional[CourseTypeEnum] = None
     instructor_name: Optional[str] = None
+    attendance_enabled: bool = False
 
     @field_validator("title")
     @classmethod
@@ -28,6 +29,7 @@ class CourseUpdate(BaseModel):
     thumbnail_url: Optional[str] = None
     type: Optional[CourseTypeEnum] = None
     instructor_name: Optional[str] = None
+    attendance_enabled: Optional[bool] = None
 
 
 class CourseResponse(BaseModel):
@@ -39,6 +41,7 @@ class CourseResponse(BaseModel):
     type: Optional[CourseTypeEnum]
     total_lessons: int
     is_published: bool
+    attendance_enabled: bool
     created_by: Optional[UUID]
     instructor_name: Optional[str]
     created_at: datetime

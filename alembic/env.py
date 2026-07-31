@@ -20,6 +20,8 @@ from app.models.assignment import Assignment  # noqa
 from app.models.announcement import Announcement  # noqa
 from app.models.certificate import Certificate  # noqa
 from app.models.token_blacklist import TokenBlacklist  # noqa
+from app.models.certificate_request import CertificateRequest  # noqa
+from app.models.Attendence import Attendance 
 
 # this is the Alembic Config object, which provides access to values
 # within the .ini file in use.
