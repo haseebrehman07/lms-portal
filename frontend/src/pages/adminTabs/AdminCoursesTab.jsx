@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Settings, X, Upload, Clock, User, BookOpen, Calendar, AlertTriangle, CheckCircle, Award, RotateCcw } from 'lucide-react';
+import { Plus, Settings, X, Upload, BookOpen, Calendar, AlertTriangle, CheckCircle, Award, RotateCcw, Clock, Trash2, CalendarOff } from 'lucide-react';
 import api from '../../api/axiosConfig'; 
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../../utils/cropUtils';
@@ -20,8 +20,26 @@ const AdminCoursesTab = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   
-  // Added attendance_enabled to state
-  const [formData, setFormData] = useState({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false, attendance_enabled: false });
+  // Tab Management
+  const [activeModalTab, setActiveModalTab] = useState('details'); // 'details' | 'schedule'
+
+  // Cancellation State
+  const [cancelledDates, setCancelledDates] = useState([]);
+  const [cancelDateForm, setCancelDateForm] = useState({ date: '', reason: '' });
+  
+  const defaultFormState = { 
+    id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', 
+    is_published: false, is_completed: false, attendance_enabled: false,
+    session_days: [0, 6], // Defaulting to Sun/Sat
+    attendance_cutoff_time: '', total_sessions: '', batch_start_date: ''
+  };
+
+  const [formData, setFormData] = useState(defaultFormState);
+
+  const DAYS = [
+    { label: 'Sun', value: 0 }, { label: 'Mon', value: 1 }, { label: 'Tue', value: 2 },
+    { label: 'Wed', value: 3 }, { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 }, { label: 'Sat', value: 6 }
+  ];
 
   const fetchCourses = async () => {
     try {
@@ -29,6 +47,15 @@ const AdminCoursesTab = () => {
       setCourses(response.data);
     } catch (error) {
       console.error("Failed to fetch courses:", error);
+    }
+  };
+
+  const fetchCancelledDates = async (courseId) => {
+    try {
+      const res = await api.get(`/attendance/course/${courseId}/cancelled-dates`);
+      setCancelledDates(res.data);
+    } catch (error) {
+      console.error("Failed to load cancelled dates:", error);
     }
   };
 
@@ -47,6 +74,7 @@ const AdminCoursesTab = () => {
   const openModal = (course = null) => {
     setIsConfirmingDelete(false);
     setDeleteCountdown(5);
+    setActiveModalTab('details');
 
     if (course) {
       setFormData({ 
@@ -59,11 +87,17 @@ const AdminCoursesTab = () => {
         thumbnailUrl: course.thumbnail_url || '',
         is_published: course.is_published || false,
         is_completed: course.is_completed || false,
-        attendance_enabled: course.attendance_enabled || false // Populate from course
+        attendance_enabled: course.attendance_enabled || false,
+        session_days: course.session_days || [0, 6],
+        attendance_cutoff_time: course.attendance_cutoff_time || '',
+        total_sessions: course.total_sessions || '',
+        batch_start_date: course.batch_start_date || ''
       });
+      fetchCancelledDates(course.id);
       setIsModalOpen(true);
     } else {
-      setFormData({ id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', is_published: false, is_completed: false, attendance_enabled: false });
+      setFormData(defaultFormState);
+      setCancelledDates([]);
       setIsModalOpen(true);
     }
   };
@@ -90,7 +124,6 @@ const AdminCoursesTab = () => {
     setIsUploading(true);
     try {
       const croppedImageFile = await getCroppedImg(rawImage, croppedAreaPixels);
-      
       const uploadData = new FormData();
       uploadData.append('file', croppedImageFile);
 
@@ -110,7 +143,7 @@ const AdminCoursesTab = () => {
 
   const handleSave = async () => {
     setIsLoading(true);
-    // Added attendance_enabled to payload
+    
     const payload = {
       title: formData.title,
       instructor_name: formData.instructor, 
@@ -118,7 +151,11 @@ const AdminCoursesTab = () => {
       start_date: formData.startDate || null,
       end_date: formData.endDate || null,
       thumbnail_url: formData.thumbnailUrl,
-      attendance_enabled: formData.attendance_enabled 
+      attendance_enabled: formData.attendance_enabled,
+      session_days: formData.session_days,
+      attendance_cutoff_time: formData.attendance_cutoff_time || null,
+      total_sessions: formData.total_sessions ? parseInt(formData.total_sessions) : null,
+      batch_start_date: formData.batch_start_date || null
     };
 
     try {
@@ -165,22 +202,54 @@ const AdminCoursesTab = () => {
   const handleToggleCompletion = async () => {
     if (!formData.id) return;
     const isCompleting = !formData.is_completed;
-    
     const confirmMsg = isCompleting 
-      ? "Are you sure you want to end this course? This will automatically mark ALL enrolled students as 'Completed' so they can receive their certificates."
+      ? "Are you sure you want to end this course? This will automatically mark ALL enrolled students as 'Completed'."
       : "Are you sure you want to revert this course to Active? This will change all student enrollments back to 'In Progress'.";
       
     if (!window.confirm(confirmMsg)) return;
 
     try {
       await api.post(`/courses/${formData.id}/toggle-completion`);
-      alert(`Course and enrollments marked as ${isCompleting ? 'completed' : 'active'}!`);
+      alert(`Course marked as ${isCompleting ? 'completed' : 'active'}!`);
       await fetchCourses();
       closeModal();
     } catch (error) {
-      console.error("Failed to toggle completion:", error);
-      alert(error.response?.data?.detail || "Failed to update course completion status.");
+      alert(error.response?.data?.detail || "Failed to update status.");
     }
+  };
+
+  const handleCancelDate = async (e) => {
+    e.preventDefault();
+    if (!cancelDateForm.date || !formData.id) return;
+    try {
+      await api.post(`/attendance/course/${formData.id}/cancel-date`, {
+        date: cancelDateForm.date,
+        reason: cancelDateForm.reason
+      });
+      setCancelDateForm({ date: '', reason: '' });
+      await fetchCancelledDates(formData.id);
+    } catch (error) {
+      alert(error.response?.data?.detail || "Failed to cancel date.");
+    }
+  };
+
+  const handleRestoreDate = async (cancellationId) => {
+    if (!formData.id) return;
+    try {
+      await api.delete(`/attendance/course/${formData.id}/cancel-date/${cancellationId}`);
+      await fetchCancelledDates(formData.id);
+    } catch (error) {
+      alert("Failed to restore date.");
+    }
+  };
+
+  const toggleDay = (dayValue) => {
+    setFormData(prev => ({
+      ...prev,
+      session_days: prev.session_days.includes(dayValue)
+        ? prev.session_days.filter(d => d !== dayValue)
+        : [...prev.session_days, dayValue].sort((a, b) => a - b)
+    }));
   };
 
   if (editingCourse) {
@@ -250,95 +319,83 @@ const AdminCoursesTab = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden relative animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-200">
             
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">
-                {isConfirmingDelete ? 'Confirm Deletion' : formData.title ? 'Edit Course Settings' : 'Create New Course'}
-              </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
-                <X className="w-6 h-6" />
-              </button>
+            {/* Modal Header & Tabs */}
+            <div className="border-b border-gray-100">
+              <div className="flex justify-between items-center p-6 pb-4">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isConfirmingDelete ? 'Confirm Deletion' : formData.id ? 'Course Settings' : 'Create New Course'}
+                </h2>
+                <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100 transition-colors cursor-pointer">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              {!isConfirmingDelete && (
+                <div className="flex gap-6 px-6">
+                  <button 
+                    onClick={() => setActiveModalTab('details')}
+                    className={`pb-3 font-bold text-sm transition-colors border-b-2 ${activeModalTab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    General Details
+                  </button>
+                  <button 
+                    onClick={() => setActiveModalTab('schedule')}
+                    className={`pb-3 font-bold text-sm transition-colors border-b-2 ${activeModalTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Schedule & Attendance
+                  </button>
+                </div>
+              )}
             </div>
 
-            {isConfirmingDelete ? (
-              <div className="p-10 flex flex-col items-center text-center">
-                <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6">
-                  <AlertTriangle className="w-10 h-10 text-red-500" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Are you absolutely sure?</h3>
-                <p className="text-gray-600 max-w-md mx-auto mb-8 leading-relaxed">
-                  Deleting <span className="font-bold text-gray-900">"{formData.title}"</span> will erase all uploads in it, enrolled students, assignment records, and etc. This action cannot be undone.
-                </p>
-                
-                <div className="flex gap-4 w-full max-w-sm">
-                  <button 
-                    onClick={() => {
-                      setIsConfirmingDelete(false);
-                      setDeleteCountdown(5);
-                    }}
-                    className="flex-1 px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg font-bold hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
+            {/* Modal Scrollable Body */}
+            <div className="overflow-y-auto custom-scrollbar flex-1 p-6">
+              {isConfirmingDelete ? (
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6">
+                    <AlertTriangle className="w-10 h-10 text-red-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Are you absolutely sure?</h3>
+                  <p className="text-gray-600 max-w-md mx-auto mb-8 leading-relaxed">
+                    Deleting <span className="font-bold text-gray-900">"{formData.title}"</span> will erase all uploads, enrolled students, and assignment records. This action cannot be undone.
+                  </p>
                   
-                  <button 
-                    disabled={deleteCountdown > 0}
-                    onClick={executeDelete}
-                    className={`flex-1 px-4 py-3 rounded-lg font-bold text-white transition-all duration-300 ${
-                      deleteCountdown > 0 
-                        ? 'bg-red-300 cursor-not-allowed opacity-80' 
-                        : 'bg-red-600 hover:bg-red-700 shadow-md cursor-pointer' 
-                    }`}
-                  >
-                    {deleteCountdown > 0 ? `Yes, Delete (${deleteCountdown}s)` : 'Yes, Delete'}
-                  </button>
+                  <div className="flex gap-4 w-full max-w-sm">
+                    <button 
+                      onClick={() => { setIsConfirmingDelete(false); setDeleteCountdown(5); }}
+                      className="flex-1 px-4 py-3 text-gray-700 bg-white border border-gray-300 rounded-lg font-bold hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      disabled={deleteCountdown > 0}
+                      onClick={executeDelete}
+                      className={`flex-1 px-4 py-3 rounded-lg font-bold text-white transition-all duration-300 ${
+                        deleteCountdown > 0 ? 'bg-red-300 cursor-not-allowed opacity-80' : 'bg-red-600 hover:bg-red-700 shadow-md cursor-pointer' 
+                      }`}
+                    >
+                      {deleteCountdown > 0 ? `Yes, Delete (${deleteCountdown}s)` : 'Yes, Delete'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-            ) : (
-              <>
-                <div className="p-6 flex flex-col md:flex-row gap-8">
+              ) : activeModalTab === 'details' ? (
+                /* Details Tab */
+                <div className="flex flex-col md:flex-row gap-8">
                   <div className="w-full md:w-1/3 flex flex-col items-center">
                     {rawImage ? (
                       <div className="w-full flex flex-col gap-4 animate-in fade-in duration-200">
                         <div className="relative w-full aspect-[4/5] bg-gray-900 rounded-xl overflow-hidden shadow-inner">
-                          <Cropper
-                            image={rawImage}
-                            crop={crop}
-                            zoom={zoom}
-                            aspect={4 / 5} 
-                            onCropChange={setCrop}
-                            onZoomChange={setZoom}
-                            onCropComplete={onCropComplete}
-                          />
+                          <Cropper image={rawImage} crop={crop} zoom={zoom} aspect={4 / 5} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} />
                         </div>
                         <div className="px-2">
                           <label className="text-xs text-gray-500 mb-1 block font-medium">Zoom</label>
-                          <input
-                            type="range"
-                            value={zoom}
-                            min={1}
-                            max={3}
-                            step={0.1}
-                            onChange={(e) => setZoom(e.target.value)}
-                            className="w-full accent-blue-600"
-                          />
+                          <input type="range" value={zoom} min={1} max={3} step={0.1} onChange={(e) => setZoom(e.target.value)} className="w-full accent-blue-600" />
                         </div>
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setRawImage(null)}
-                            className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition-colors cursor-pointer"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleCropAndUpload}
-                            disabled={isUploading}
-                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer disabled:bg-blue-400"
-                          >
+                          <button type="button" onClick={() => setRawImage(null)} className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-lg transition-colors cursor-pointer">Cancel</button>
+                          <button type="button" onClick={handleCropAndUpload} disabled={isUploading} className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer disabled:bg-blue-400">
                             {isUploading ? 'Saving...' : 'Crop & Save'}
                           </button>
                         </div>
@@ -346,7 +403,6 @@ const AdminCoursesTab = () => {
                     ) : (
                       <>
                         <label className="w-full aspect-[4/5] bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:bg-gray-100 hover:border-blue-400 transition-colors cursor-pointer group relative overflow-hidden">
-                          
                           {formData.thumbnailUrl ? (
                             <div className="w-full h-full relative group">
                               <img src={formData.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
@@ -360,14 +416,7 @@ const AdminCoursesTab = () => {
                               <span className="text-sm font-medium group-hover:text-blue-500">Select Image</span>
                             </>
                           )}
-
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="hidden" 
-                            onChange={handleImageSelect}
-                            disabled={isUploading}
-                          />
+                          <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} disabled={isUploading} />
                         </label>
                         <p className="text-xs text-gray-400 mt-3 text-center">Recommended: Portrait (4:5 ratio)</p>
                       </>
@@ -377,140 +426,212 @@ const AdminCoursesTab = () => {
                   <div className="w-full md:w-2/3 space-y-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Course Name</label>
-                      <input 
-                        placeholder="e.g., Introduction to Programming"
-                        type="text" 
-                        value={formData.title}
-                        onChange={(e) => setFormData({...formData, title: e.target.value})}
-                        className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                      />
+                      <input type="text" placeholder="e.g., Introduction to Programming" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Instructor Name</label>
-                      <input 
-                        placeholder="e.g., Dr. Alan Turing"
-                        type="text" 
-                        value={formData.instructor}
-                        onChange={(e) => setFormData({...formData, instructor: e.target.value})}
-                        className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                      />
+                      <input type="text" placeholder="e.g., Dr. Alan Turing" value={formData.instructor} onChange={(e) => setFormData({...formData, instructor: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timings</label>
-                      <input 
-                        placeholder="e.g., 01:00 PM - 03:00 PM"
-                        type="text" 
-                        value={formData.timings}
-                        onChange={(e) => setFormData({...formData, timings: e.target.value})}
-                        className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1">General Timings</label>
+                      <input type="text" placeholder="e.g., 01:00 PM - 03:00 PM" value={formData.timings} onChange={(e) => setFormData({...formData, timings: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                            <div className="relative group cursor-pointer">
-                                <input 
-                                    type="date" 
-                                    value={formData.startDate}
-                                    onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm text-gray-700 bg-transparent relative z-10 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                />
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-gray-400 group-hover:text-blue-600 group-hover:bg-gray-100 group-hover:shadow-sm transition-all pointer-events-none z-0">
-                                    <Calendar className="w-4 h-4" />
-                                </div>
-                            </div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Start Date</label>
+                            <input type="date" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                         </div>
-
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Finish Date</label>
-                            <div className="relative group cursor-pointer">
-                                <input 
-                                    type="date" 
-                                    value={formData.endDate}
-                                    onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                                    className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm text-gray-700 bg-transparent relative z-10 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                />
-                                <div className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full text-gray-400 group-hover:text-blue-600 group-hover:bg-gray-100 group-hover:shadow-sm transition-all pointer-events-none z-0">
-                                    <Calendar className="w-4 h-4" />
-                                </div>
-                            </div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Course End Date</label>
+                            <input type="date" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                         </div>
                     </div>
-
-                    {/* NEW: Attendance Tracking Toggle */}
-                    <div className="pt-2">
-                      <label className="flex items-center cursor-pointer gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50 hover:bg-blue-50 transition-colors">
-                        <input 
-                          type="checkbox"
-                          className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                          checked={formData.attendance_enabled}
-                          onChange={(e) => setFormData({...formData, attendance_enabled: e.target.checked})}
-                        />
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-900">Enable Attendance Tracking</span>
-                          <span className="text-xs text-gray-500 font-medium mt-0.5">Allow students to mark daily presence</span>
-                        </div>
-                      </label>
-                    </div>
-
                   </div>
                 </div>
-
-                <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center">
-                  <div className="flex gap-3">
-                    {formData.id && (
-                      <button 
-                        onClick={() => setIsConfirmingDelete(true)}
-                        className="text-red-600 bg-red-50 hover:bg-red-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    )}
-                    {formData.id && !formData.is_published && !formData.is_completed && (
-                      <button 
-                        onClick={handlePublish}
-                        className="text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Publish
-                      </button>
-                    )}
-                    {formData.id && formData.is_published && !formData.is_completed && (
-                      <button 
-                        onClick={handleToggleCompletion}
-                        className="text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
-                      >
-                        <Award className="w-4 h-4" />
-                        Mark as Completed
-                      </button>
-                    )}
-                    {formData.id && formData.is_completed && (
-                      <button 
-                        onClick={handleToggleCompletion}
-                        className="text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 px-4 py-2 rounded-lg font-medium transition-colors text-sm cursor-pointer flex items-center gap-2 shadow-sm"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        Revert to Active
-                      </button>
-                    )}
-                  </div>
+              ) : (
+                /* Schedule & Attendance Tab */
+                <div className="space-y-8 animate-in fade-in duration-200">
                   
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={closeModal}
-                      className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={handleSave}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm cursor-pointer"
-                    >
-                      {formData.id ? 'Save Changes' : 'Create Course'}
-                    </button>
+                  {/* Toggle Section */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                    <label className="flex items-center cursor-pointer gap-3">
+                      <input 
+                        type="checkbox"
+                        className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                        checked={formData.attendance_enabled}
+                        onChange={(e) => setFormData({...formData, attendance_enabled: e.target.checked})}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-base font-bold text-gray-900">Enable Attendance Tracking</span>
+                        <span className="text-sm text-gray-500 mt-0.5">Activate daily presence marking, batch management, and schedule restrictions.</span>
+                      </div>
+                    </label>
                   </div>
+
+                  {formData.attendance_enabled && (
+                    <>
+                      {/* Configuration Grid */}
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Batch Schedule</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Class Days (Session Days)</label>
+                            <div className="flex flex-wrap gap-2">
+                              {DAYS.map(day => (
+                                <button 
+                                  key={day.value}
+                                  type="button"
+                                  onClick={() => toggleDay(day.value)}
+                                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${formData.session_days.includes(day.value) ? 'bg-blue-600 text-white shadow-md' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                  {day.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Attendance Cutoff Time</label>
+                            <div className="relative">
+                              <input 
+                                type="time" 
+                                value={formData.attendance_cutoff_time}
+                                onChange={(e) => setFormData({...formData, attendance_cutoff_time: e.target.value})}
+                                className="w-full border border-gray-300 rounded-lg p-2.5 pl-10 outline-none focus:border-blue-500" 
+                              />
+                              <Clock className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Leave empty for no daily limit.</p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Total Sessions (Batch Cap)</label>
+                            <input 
+                              type="number" 
+                              placeholder="e.g., 20"
+                              value={formData.total_sessions}
+                              onChange={(e) => setFormData({...formData, total_sessions: e.target.value})}
+                              className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500" 
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Course concludes after this many classes.</p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Batch Start Date</label>
+                            <input 
+                              type="date" 
+                              value={formData.batch_start_date}
+                              onChange={(e) => setFormData({...formData, batch_start_date: e.target.value})}
+                              className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500" 
+                            />
+                          </div>
+
+                        </div>
+                      </div>
+
+                      {/* Exceptions / Cancellations (Only on Existing Courses) */}
+                      {formData.id && (
+                        <div>
+                          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Class Exceptions & Cancellations</h3>
+                          
+                          <form onSubmit={handleCancelDate} className="flex flex-col sm:flex-row gap-3 mb-6 bg-red-50/50 p-4 rounded-xl border border-red-100">
+                            <div className="flex-1">
+                              <input 
+                                type="date" required
+                                value={cancelDateForm.date}
+                                onChange={e => setCancelDateForm({...cancelDateForm, date: e.target.value})}
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                              />
+                            </div>
+                            <div className="flex-[2]">
+                              <input 
+                                type="text" placeholder="Reason (e.g., Instructor Ill, Holiday)"
+                                value={cancelDateForm.reason}
+                                onChange={e => setCancelDateForm({...cancelDateForm, reason: e.target.value})}
+                                className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                              />
+                            </div>
+                            <button type="submit" className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition-colors whitespace-nowrap flex items-center justify-center gap-2">
+                              <CalendarOff className="w-4 h-4" /> Cancel Class
+                            </button>
+                          </form>
+
+                          {cancelledDates.length > 0 ? (
+                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                              <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 text-gray-500 font-medium">
+                                  <tr>
+                                    <th className="px-4 py-3">Cancelled Date</th>
+                                    <th className="px-4 py-3">Reason</th>
+                                    <th className="px-4 py-3 text-right">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {cancelledDates.map(c => (
+                                    <tr key={c.id}>
+                                      <td className="px-4 py-3 font-bold text-gray-900">{new Date(c.date).toLocaleDateString()}</td>
+                                      <td className="px-4 py-3 text-gray-600">{c.reason || '-'}</td>
+                                      <td className="px-4 py-3 text-right">
+                                        <button 
+                                          onClick={() => handleRestoreDate(c.id)}
+                                          className="text-gray-400 hover:text-green-600 hover:bg-green-50 p-1.5 rounded transition-colors"
+                                          title="Restore Date"
+                                        >
+                                          <RotateCcw className="w-4 h-4" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                              No dates have been cancelled for this course.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {!isConfirmingDelete && (
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center mt-auto">
+                <div className="flex gap-2">
+                  {formData.id && (
+                    <button onClick={() => setIsConfirmingDelete(true)} className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-2 rounded-lg font-bold transition-colors text-sm flex items-center justify-center">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {formData.id && !formData.is_published && !formData.is_completed && (
+                    <button onClick={handlePublish} className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-lg font-bold transition-colors text-sm flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" /> Publish
+                    </button>
+                  )}
+                  {formData.id && formData.is_published && !formData.is_completed && (
+                    <button onClick={handleToggleCompletion} className="text-purple-700 bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-lg font-bold transition-colors text-sm flex items-center gap-2">
+                      <Award className="w-4 h-4" /> Mark as Completed
+                    </button>
+                  )}
+                  {formData.id && formData.is_completed && (
+                    <button onClick={handleToggleCompletion} className="text-orange-700 bg-orange-50 hover:bg-orange-100 px-4 py-2 rounded-lg font-bold transition-colors text-sm flex items-center gap-2">
+                      <RotateCcw className="w-4 h-4" /> Revert to Active
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex gap-3">
+                  <button onClick={closeModal} className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg font-bold hover:bg-gray-50 transition-colors text-sm">Cancel</button>
+                  <button onClick={handleSave} disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors text-sm disabled:opacity-70">
+                    {isLoading ? 'Saving...' : formData.id ? 'Save Changes' : 'Create Course'}
+                  </button>
+                </div>
+              </div>
             )}
 
           </div>

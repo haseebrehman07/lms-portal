@@ -1,30 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, Trash2, X, AlertTriangle, Calendar, FileText, Activity } from 'lucide-react';
+import { MoreVertical, Download, Search } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const AdminAttendanceTab = () => {
-  const [activeTab, setActiveTab] = useState('records'); // 'records' or 'summary'
-  
   const [courses, setCourses] = useState([]);
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  
-  // Tab 1: Records
   const [records, setRecords] = useState([]);
-  const [filterDate, setFilterDate] = useState('');
-  const [editingRecord, setEditingRecord] = useState(null);
-  
-  // Tab 2: Summary
-  const [summaryData, setSummaryData] = useState([]);
-  
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Real API Filters
+  const [dateFilter, setDateFilter] = useState(''); 
+  const [selectedMode, setSelectedMode] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
-  // 1. Fetch courses (only those with attendance enabled)
   useEffect(() => {
     const fetchCourses = async () => {
       try {
         const res = await api.get('/courses');
-        const trackingCourses = res.data.filter(c => c.attendance_enabled);
-        setCourses(trackingCourses);
+        setCourses(res.data.filter(c => c.attendance_enabled));
       } catch (err) {
         console.error("Failed to load courses:", err);
       }
@@ -32,261 +28,175 @@ const AdminAttendanceTab = () => {
     fetchCourses();
   }, []);
 
-  // 2. Fetch Data based on active tab
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchRecords = async () => {
       setIsLoading(true);
       try {
-        if (activeTab === 'records') {
-          let url = '/attendance?';
-          if (selectedCourseId) url += `course_id=${selectedCourseId}&`;
-          if (filterDate) url += `date=${filterDate}`;
-          
-          const res = await api.get(url);
-          setRecords(res.data);
-        } else if (activeTab === 'summary' && selectedCourseId) {
-          const res = await api.get(`/attendance/course/${selectedCourseId}/summary`);
-          setSummaryData(res.data);
-        } else {
-          setSummaryData([]);
-        }
+        const params = new URLSearchParams({ page: currentPage, limit: 15 });
+        if (selectedCourseId) params.append('course_id', selectedCourseId);
+        if (selectedMode) params.append('mode', selectedMode);
+        if (dateFilter) params.append('date', dateFilter);
+        if (searchQuery) params.append('search', searchQuery);
+        
+        const res = await api.get(`/attendance?${params.toString()}`);
+        setRecords(res.data.items || res.data); // Adjust based on teammate's exact pagination JSON shape
+        setTotalPages(res.data.total_pages || 1);
+        setTotalRecords(res.data.total_items || res.data.length);
       } catch (err) {
         console.error("Failed to load attendance data:", err);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
-  }, [activeTab, selectedCourseId, filterDate]);
+    
+    // Add a small debounce for the text search
+    const delayDebounceFn = setTimeout(() => {
+      fetchRecords();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [selectedCourseId, selectedMode, dateFilter, searchQuery, currentPage]);
 
-  // Actions
-  const handleEditSave = async (e) => {
-    e.preventDefault();
-    try {
-      await api.patch(`/attendance/${editingRecord.id}`, {
-        date: editingRecord.date,
-        mode: editingRecord.mode
-      });
-      setEditingRecord(null);
-      // Trigger re-fetch
-      const url = `/attendance?${selectedCourseId ? `course_id=${selectedCourseId}&` : ''}${filterDate ? `date=${filterDate}` : ''}`;
-      const res = await api.get(url);
-      setRecords(res.data);
-    } catch (err) {
-      alert(err.response?.data?.detail || "Failed to update record.");
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this attendance record?")) return;
-    try {
-      await api.delete(`/attendance/${id}`);
-      setRecords(records.filter(r => r.id !== id));
-    } catch (err) {
-      alert("Failed to delete record.");
-    }
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (selectedCourseId) params.append('course_id', selectedCourseId);
+    if (selectedMode) params.append('mode', selectedMode);
+    if (dateFilter) params.append('date', dateFilter);
+    if (searchQuery) params.append('search', searchQuery);
+    
+    // Trigger browser download by hitting the new export endpoint directly
+    window.location.href = `${api.defaults.baseURL}/attendance/export?${params.toString()}`;
   };
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 text-gray-800">
       
-      {/* Header & Tabs */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Attendance Log</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage and report daily student presence.</p>
-        </div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">Attendance Records</h1>
+        <p className="text-sm text-gray-500 mt-1">View and manage student attendance.</p>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         
-        <div className="flex bg-gray-100 p-1.5 rounded-xl shadow-inner w-full sm:w-auto">
-          <button
-            onClick={() => setActiveTab('records')}
-            className={`flex-1 sm:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all duration-300 flex justify-center items-center gap-2 ${
-              activeTab === 'records' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <FileText className="w-4 h-4" /> Raw Records
-          </button>
-          <button
-            onClick={() => setActiveTab('summary')}
-            className={`flex-1 sm:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all duration-300 flex justify-center items-center gap-2 ${
-              activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Activity className="w-4 h-4" /> Summary Report
-          </button>
+        {/* Dynamic Filters Toolbar */}
+        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap gap-3 items-center justify-between bg-gray-50/50">
+          
+          <div className="flex flex-wrap gap-3 items-center w-full md:w-auto">
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+              className="bg-white border border-gray-300 text-gray-700 text-sm rounded px-3 py-1.5 font-medium shadow-sm outline-none focus:border-blue-500"
+            />
+            <select
+              value={selectedMode}
+              onChange={(e) => { setSelectedMode(e.target.value); setCurrentPage(1); }}
+              className="bg-white border border-gray-300 text-gray-700 text-sm rounded px-3 py-1.5 font-medium shadow-sm outline-none focus:border-blue-500"
+            >
+              <option value="">All Modes</option>
+              <option value="online">Online</option>
+              <option value="onsite">On-site</option>
+            </select>
+
+            <select
+              value={selectedCourseId}
+              onChange={(e) => { setSelectedCourseId(e.target.value); setCurrentPage(1); }}
+              className="bg-white border border-gray-300 text-gray-700 text-sm rounded px-3 py-1.5 font-medium shadow-sm outline-none focus:border-blue-500 max-w-[200px] truncate"
+            >
+              <option value="">All Courses</option>
+              {courses.map(c => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center w-full md:w-auto">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search student..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="bg-white border border-gray-300 text-gray-700 text-sm rounded pl-3 pr-8 py-1.5 font-medium shadow-sm w-full md:w-48 outline-none focus:border-blue-500"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+            </div>
+
+            <button 
+              onClick={handleExport}
+              className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm rounded px-3 py-1.5 font-medium shadow-sm flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <select
-          value={selectedCourseId}
-          onChange={(e) => setSelectedCourseId(e.target.value)}
-          className="w-full sm:w-72 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 shadow-sm font-medium"
-        >
-          <option value="">{activeTab === 'summary' ? 'Select a course to view summary...' : 'All Tracking Courses'}</option>
-          {courses.map(c => (
-            <option key={c.id} value={c.id}>{c.title}</option>
-          ))}
-        </select>
-
-        {activeTab === 'records' && (
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="w-full sm:w-auto bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 shadow-sm font-medium"
-          />
-        )}
-      </div>
-
-      {/* Content Area */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Data Table */}
         {isLoading ? (
           <div className="flex justify-center items-center h-48">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
-        ) : activeTab === 'summary' ? (
-          // SUMMARY TAB
-          !selectedCourseId ? (
-            <div className="p-16 text-center text-gray-500 font-medium bg-gray-50 border-t border-gray-100">
-              Please select a course from the dropdown above to view its summary report.
-            </div>
-          ) : summaryData.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 font-medium">No attendance data exists for this course yet.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Learner Name</th>
-                    <th className="px-6 py-4 font-semibold text-center text-purple-600">On-Site Total</th>
-                    <th className="px-6 py-4 font-semibold text-center text-blue-600">Online Total</th>
-                    <th className="px-6 py-4 font-semibold text-center bg-gray-100 border-l border-gray-200">Total Sessions Attended</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {summaryData.map(row => (
-                    <tr key={row.user_id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-gray-900">{row.user_name}</td>
-                      <td className="px-6 py-4 text-center font-medium text-gray-600">{row.onsite_count}</td>
-                      <td className="px-6 py-4 text-center font-medium text-gray-600">{row.online_count}</td>
-                      <td className="px-6 py-4 text-center font-black text-gray-900 bg-gray-50 border-l border-gray-100">{row.total_sessions_marked}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
         ) : (
-          // RECORDS TAB
-          records.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 font-medium">No attendance records match these filters.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Learner Name</th>
-                    <th className="px-6 py-4 font-semibold">Course</th>
-                    <th className="px-6 py-4 font-semibold">Date</th>
-                    <th className="px-6 py-4 font-semibold">Mode</th>
-                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {records.map(record => (
-                    <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 font-bold text-gray-900">
-                        {record.user_name} <br/>
-                        <span className="text-xs text-gray-500 font-medium">{record.user_email}</span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 font-medium">{record.course_title}</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">{record.date}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-[11px] text-gray-500 uppercase tracking-wider bg-white border-b border-gray-100">
+                <tr>
+                  <th className="px-6 py-4 font-bold">Student Name</th>
+                  <th className="px-6 py-4 font-bold">Date</th>
+                  <th className="px-6 py-4 font-bold">Day</th>
+                  <th className="px-6 py-4 font-bold">Mode</th>
+                  <th className="px-6 py-4 font-bold">Status</th>
+                  <th className="px-6 py-4 font-bold">Time Marked</th>
+                  <th className="px-6 py-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {records.map(record => {
+                  const dateObj = new Date(record.date);
+                  return (
+                    <tr key={record.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-gray-900">{record.user_name}</td>
+                      <td className="px-6 py-4 text-gray-600 font-medium">{dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                      <td className="px-6 py-4 text-gray-600 font-medium">{dateObj.toLocaleDateString('en-US', { weekday: 'long' })}</td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold ${
-                          record.mode === 'onsite' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-bold ${
+                          record.mode === 'online' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
                         }`}>
-                          {record.mode === 'onsite' ? 'On-Site' : 'Online'}
+                          {record.mode === 'online' ? 'Online' : 'On-site'}
                         </span>
                       </td>
+                      <td className="px-6 py-4"><span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-bold text-emerald-600">Present</span></td>
+                      <td className="px-6 py-4 text-gray-600 font-medium">{new Date(record.marked_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => setEditingRecord(record)}
-                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2 cursor-pointer"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(record.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <button className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"><MoreVertical className="w-4 h-4" /></button>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {/* Pagination Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white">
+              <span className="text-sm text-gray-500 font-medium">
+                Showing Page {currentPage} of {totalPages} ({totalRecords} records)
+              </span>
+              <div className="flex gap-1">
+                <button 
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => prev - 1)}
+                  className="px-3 py-1 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded text-sm font-medium disabled:opacity-50"
+                >&lt;</button>
+                <span className="px-3 py-1 border border-blue-600 bg-blue-600 text-white rounded text-sm font-medium">{currentPage}</span>
+                <button 
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  className="px-3 py-1 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded text-sm font-medium disabled:opacity-50"
+                >&gt;</button>
+              </div>
             </div>
-          )
+          </div>
         )}
       </div>
-
-      {/* Edit Modal */}
-      {editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Edit Record</h2>
-              <button onClick={() => setEditingRecord(null)} className="text-gray-400 hover:bg-gray-100 p-1 rounded-md transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleEditSave} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                <input 
-                  type="date"
-                  required
-                  value={editingRecord.date}
-                  onChange={e => setEditingRecord({...editingRecord, date: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mode</label>
-                <select
-                  value={editingRecord.mode}
-                  onChange={e => setEditingRecord({...editingRecord, mode: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                >
-                  <option value="onsite">On-Site</option>
-                  <option value="online">Online</option>
-                </select>
-              </div>
-
-              <div className="pt-4 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={() => setEditingRecord(null)}
-                  className="flex-1 px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg font-bold hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
