@@ -5,7 +5,7 @@ from uuid import UUID
 from typing import Optional, List
 from app.database import get_db
 from app.models.course import Course, CourseTypeEnum
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.enrollment import Enrollment, LessonProgress
 from app.models.user import User, RoleEnum
 from app.schemas.course import CourseCreate, CourseUpdate, CourseResponse
@@ -235,3 +235,4 @@ def publish_course(
     db.commit()
     db.refresh(course)
     return course
+

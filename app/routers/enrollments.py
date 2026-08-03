@@ -4,7 +4,7 @@ from typing import List, Optional
 from uuid import UUID
 from app.database import get_db
 from app.models.enrollment import Enrollment, EnrollmentStatusEnum, LessonProgress
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.course import Course
 from app.models.user import User
 from app.schemas.enrollment import (

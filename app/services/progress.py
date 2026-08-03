@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.enrollment import Enrollment, LessonProgress, EnrollmentStatusEnum
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 
 
 def recalculate_progress(enrollment_id, db: Session):

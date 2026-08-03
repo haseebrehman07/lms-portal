@@ -13,7 +13,7 @@ from app.models.course import Course  # noqa
 from app.models.category import Category  # noqa
 from app.models.enrollment import Enrollment, LessonProgress  # noqa
 from app.models.enrollment_request import EnrollmentRequest  # noqa
-from app.models.lesson import Lesson  # noqa
+from app.models.lessons import Lesson  # noqa
 from app.models.Module import Module  # noqa
 from app.models.quiz import Quiz  # noqa
 from app.models.assignment import Assignment  # noqa

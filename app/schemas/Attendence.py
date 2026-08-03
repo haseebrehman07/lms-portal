@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from uuid import UUID
 from datetime import date, datetime
-from app.models.attendance import AttendanceModeEnum
+from app.models.Attendence import AttendanceModeEnum
 
 
 class AttendanceMarkRequest(BaseModel):

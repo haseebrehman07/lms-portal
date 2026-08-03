@@ -1,19 +1,20 @@
-"""add attendance_enabled to courses
+"""add session_days to courses
 
-Revision ID: c3d4e5f6a7b8
-Revises: b7c8d9e0f1a2
-Create Date: 2026-07-30 00:10:00.000000
+Revision ID: d4e5f6a7b8c9
+Revises: c3d4e5f6a7b8
+Create Date: 2026-08-03 00:00:00.000000
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c3d4e5f6a7b8'
-down_revision: Union[str, Sequence[str], None] = 'a1b2c3d4e5f6'
+revision: str = 'd4e5f6a7b8c9'
+down_revision: Union[str, Sequence[str], None] = 'c3d4e5f6a7b8'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,9 +24,9 @@ def upgrade() -> None:
     op.add_column(
         'courses',
         sa.Column(
-            'attendance_enabled',
-            sa.Boolean(),
-            server_default='false',
+            'session_days',
+            postgresql.ARRAY(sa.Integer()),
+            server_default='{5,6}',
             nullable=False
         )
     )
@@ -33,4 +34,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_column('courses', 'attendance_enabled')
+    op.drop_column('courses', 'session_days')
