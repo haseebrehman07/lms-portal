@@ -12,6 +12,8 @@ from app.models.user import User, RoleEnum
 from app.schemas.chat import (
     ChatGroupCreate,
     ChatGroupResponse,
+    ChatGroupUpdate,
+    GroupMemberResponse,
     InviteMembersRequest,
     InviteResultResponse,
     PendingInviteResponse,
@@ -406,3 +408,123 @@ def send_chat_message(
         logger.error("Pusher trigger failed for group %s", group_id, exc_info=True)
 
     return _message_response(message)
+@router.get("/{group_id}/members", response_model=List[GroupMemberResponse])
+def get_group_members(
+    group_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Returns a list of all accepted members in the group."""
+    if not _is_member(db, group_id, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this group"
+        )
+
+    members = (
+        db.query(GroupMember, User)
+        .join(User, User.id == GroupMember.user_id)
+        .filter(
+            GroupMember.group_id == group_id,
+            GroupMember.status == GroupMemberStatusEnum.accepted
+        ).all()
+    )
+
+    return [
+        GroupMemberResponse(
+            user_id=user.id,
+            user_name=user.name,
+            role=user.role.value if hasattr(user.role, 'value') else str(user.role)
+        )
+        for member, user in members
+    ]
+
+
+@router.patch("/{group_id}", response_model=ChatGroupResponse)
+def update_group_name(
+    group_id: UUID,
+    payload: ChatGroupUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Allows any active (accepted) member to rename the group."""
+    if not _is_member(db, group_id, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this group"
+        )
+
+    if not payload.name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Group name cannot be empty"
+        )
+
+    group = db.query(ChatGroup).filter(ChatGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat group not found"
+        )
+
+    group.name = payload.name.strip()
+    db.commit()
+    db.refresh(group)
+
+    return ChatGroupResponse(
+        id=group.id,
+        name=group.name,
+        created_by=group.created_by,
+        created_at=group.created_at,
+        member_count=_member_count(db, group.id)
+    )
+
+
+@router.delete("/{group_id}/members/me", status_code=status.HTTP_200_OK)
+def exit_group(
+    group_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Allows a user to voluntarily leave the group (whether their
+    membership is accepted or still pending)."""
+    membership = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == current_user.id
+    ).first()
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="You are not in this group"
+        )
+
+    db.delete(membership)
+    db.commit()
+    return {"detail": "Successfully left the group"}
+
+
+@router.delete("/{group_id}", status_code=status.HTTP_200_OK)
+def delete_chat_group(
+    group_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Deletes the entire group and all its messages/members (cascade).
+    Only the group's creator or a system admin/manager can do this."""
+    group = db.query(ChatGroup).filter(ChatGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Group not found"
+        )
+
+    if group.created_by != current_user.id and current_user.role not in [RoleEnum.admin, RoleEnum.manager]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the group creator or an admin can delete this group"
+        )
+
+    db.delete(group)
+    db.commit()
+    return {"detail": "Group deleted successfully"}

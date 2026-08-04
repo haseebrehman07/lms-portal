@@ -17,6 +17,15 @@ class ChatGroupResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class ChatGroupUpdate(BaseModel):
+    name: str
+
+
+class GroupMemberResponse(BaseModel):
+    user_id: UUID
+    user_name: Optional[str] = None
+    role: Optional[str] = None
+
 
 class InviteMembersRequest(BaseModel):
     """Admin invites people by email and/or by their existing user id
