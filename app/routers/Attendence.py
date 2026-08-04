@@ -74,7 +74,7 @@ def _sessions_occurred(
         return 0
 
     cancelled_dates = {
-        c.date for c in db.query(ClassCancellation.date).filter(
+        c[0] for c in db.query(ClassCancellation.date).filter(
             ClassCancellation.course_id == course.id,
             ClassCancellation.date >= start,
             ClassCancellation.date <= up_to
@@ -232,6 +232,22 @@ def get_today_status(
     if course.attendance_cutoff_time and now.time() > course.attendance_cutoff_time:
         window_closed = True
 
+    # FIX: Safely calculate the NEXT class strictly starting from tomorrow.
+    # Unconditional calculation ensures it ignores whether today is a class day or not.
+    next_session_date_iso = None
+    if not batch_completed and course.session_days:
+        next_date = _next_session_date(course.session_days, today + timedelta(days=1))
+        if next_date:
+            next_session_date_iso = next_date.isoformat()
+
+    # Safely unpack marked_at to avoid NoneType errors
+    marked_mode = None
+    marked_at_iso = None
+    if existing:
+        marked_mode = existing.mode.value if hasattr(existing.mode, "value") else existing.mode
+        if getattr(existing, "marked_at", None):
+            marked_at_iso = existing.marked_at.isoformat()
+
     return {
         "date": today.isoformat(),
         "day_name": DAY_NAMES[today.weekday()],
@@ -240,17 +256,14 @@ def get_today_status(
         "batch_completed": batch_completed,
         "total_sessions": course.total_sessions,
         "already_marked": existing is not None,
-        "marked_mode": existing.mode.value if existing else None,
-        "marked_at": existing.marked_at.isoformat() if existing else None,
+        "marked_mode": marked_mode,
+        "marked_at": marked_at_iso,
         "attendance_cutoff_time": (
             course.attendance_cutoff_time.isoformat()
             if course.attendance_cutoff_time else None
         ),
         "window_closed": window_closed,
-        "next_session_date": (
-            _next_session_date(course.session_days, today + timedelta(days=1)).isoformat()
-            if not is_session_day and not batch_completed and course.session_days else None
-        )
+        "next_session_date": next_session_date_iso
     }
 
 
@@ -289,7 +302,7 @@ def get_my_attendance_summary(
     )
 
     cancelled_dates = {
-        c.date for c in db.query(ClassCancellation.date).filter(
+        c[0] for c in db.query(ClassCancellation.date).filter(
             ClassCancellation.course_id == course_id,
             ClassCancellation.date >= start_date,
             ClassCancellation.date <= today
@@ -459,7 +472,7 @@ def export_attendance_csv(
             r.date.isoformat(),
             DAY_NAMES[r.date.weekday()],
             r.mode.value,
-            r.marked_at.strftime("%I:%M %p")
+            r.marked_at.strftime("%I:%M %p") if getattr(r, "marked_at", None) else ""
         ])
 
     buffer.seek(0)

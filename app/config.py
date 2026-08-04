@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     first_admin_email: str = ""
     first_admin_password: str = ""
     first_admin_name: str = "Admin"
+    # Pusher (real-time group chat)
+    pusher_app_id: str = ""
+    pusher_key: str = ""
+    pusher_secret: str = ""
+    pusher_cluster: str = "ap2"  # Asia Pacific (Mumbai)
 
     model_config = {"env_file": ".env"}
 

@@ -29,6 +29,8 @@ from app.routers import certificates
 from app.routers import enrollment_requests
 from app.routers import certificate_request
 from app.routers import Attendence
+from app.routers import chat
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,6 +111,7 @@ app.include_router(certificates.router)
 app.include_router(enrollment_requests.router)
 app.include_router(certificate_request.router)
 app.include_router(Attendence.router)
+app.include_router(chat.router)
 
 
 
