@@ -6,7 +6,7 @@ const StudentAttendance = () => {
   const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
   
-  // New API-driven states
+  // API-driven states
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [summary, setSummary] = useState({ attendance_percentage: 0, classes_attended: 0, classes_missed: 0, total_classes: 0 });
   const [todayStatus, setTodayStatus] = useState(null);
@@ -77,6 +77,12 @@ const StudentAttendance = () => {
     }
   };
 
+  // Helper function to format the next date cleanly
+  const formatNextClass = (dateString) => {
+    if (!dateString) return 'TBD';
+    return new Date(dateString).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  };
+
   if (isLoading && enrolledCourses.length === 0) {
     return (
       <div className="flex justify-center items-center h-48">
@@ -84,6 +90,14 @@ const StudentAttendance = () => {
       </div>
     );
   }
+
+  // Bulletproof local check: Does the history contain a record for today?
+  const hasMarkedLocally = attendanceHistory.some(
+    (record) => new Date(record.date).toDateString() === new Date().toDateString()
+  );
+  
+  // Treat attendance as marked if EITHER the backend says so, or our local history check says so
+  const isAttendanceMarked = todayStatus?.has_marked || hasMarkedLocally;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto p-4 sm:p-6 text-gray-800">
@@ -142,7 +156,7 @@ const StudentAttendance = () => {
            <div className="bg-red-600 text-white p-3 rounded-lg"><AlertTriangle className="w-6 h-6" /></div>
            <div>
              <h2 className="text-xl font-bold text-gray-900">Class Cancelled</h2>
-             <p className="text-sm text-red-700 mt-1">Today's session has been cancelled by the instructor. Next class: {todayStatus.next_session_date}</p>
+             <p className="text-sm text-red-700 mt-1">Today's session has been cancelled by the instructor. Next class: {formatNextClass(todayStatus.next_session_date)}</p>
            </div>
         </div>
       ) : todayStatus.is_session_day ? (
@@ -157,23 +171,45 @@ const StudentAttendance = () => {
             </div>
           </div>
           <div className="flex flex-col items-center sm:items-end w-full md:w-auto gap-2">
-            {todayStatus.has_marked ? (
-              <div className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md">
-                <CheckCircle className="w-5 h-5" /> Marked Present
+            
+            {/* Utilize the foolproof local state check here */}
+            {isAttendanceMarked ? (
+              <div className="flex flex-col items-center sm:items-end gap-2">
+                {/* UI FIX: Soft background, colored border, and default cursor so it doesn't look clickable */}
+                <div className="w-full sm:w-auto bg-emerald-50 text-emerald-700 border border-emerald-200 px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 cursor-default">
+                  <CheckCircle className="w-5 h-5" /> Attendance is Marked
+                </div>
+                
+                {todayStatus.next_session_date && (
+                  <p className="text-sm font-bold text-emerald-700 flex items-center gap-2 bg-emerald-100/50 px-3 py-1.5 rounded-lg">
+                    <Calendar className="w-4 h-4" /> Next class: {formatNextClass(todayStatus.next_session_date)}
+                  </p>
+                )}
               </div>
             ) : (
-              <button 
-                onClick={handleMarkAttendance}
-                disabled={isMarking}
-                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors disabled:opacity-70 cursor-pointer"
-              >
-                <CheckCircle className="w-5 h-5" /> Mark My Attendance
-              </button>
-            )}
-            {todayStatus.cutoff_time && (
-              <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> Closes at: <span className="font-bold">{todayStatus.cutoff_time}</span>
-              </p>
+              <>
+                <button 
+                  onClick={handleMarkAttendance}
+                  disabled={isMarking}
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-colors disabled:opacity-70 cursor-pointer"
+                >
+                  {isMarking ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                      Marking...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" /> Mark My Attendance
+                    </>
+                  )}
+                </button>
+                {todayStatus.cutoff_time && (
+                  <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" /> Closes at: <span className="font-bold">{todayStatus.cutoff_time}</span>
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -193,7 +229,7 @@ const StudentAttendance = () => {
               <Calendar className="w-5 h-5" />
               <span className="text-sm font-bold">Your next class:</span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900">{todayStatus.next_session_date || 'TBD'}</h3> 
+            <h3 className="text-lg font-bold text-gray-900">{formatNextClass(todayStatus.next_session_date)}</h3> 
           </div>
         </div>
       )}
@@ -206,7 +242,9 @@ const StudentAttendance = () => {
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-            <span className="text-2xl font-bold text-blue-600">{summary.attendance_percentage}%</span>
+            <span className="text-2xl font-bold text-blue-600">
+              {summary.attendance_percentage || (summary.total_classes > 0 ? Math.round((summary.classes_attended / summary.total_classes) * 100) : 0)}%
+            </span>
             <span className="text-xs font-semibold text-gray-500 uppercase mt-1">Attendance %</span>
           </div>
           <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col items-center justify-center text-center">

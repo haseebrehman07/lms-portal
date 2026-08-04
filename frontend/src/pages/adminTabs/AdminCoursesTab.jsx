@@ -36,9 +36,14 @@ const AdminCoursesTab = () => {
 
   const [formData, setFormData] = useState(defaultFormState);
 
-  const DAYS = [
-    { label: 'Sun', value: 0 }, { label: 'Mon', value: 1 }, { label: 'Tue', value: 2 },
-    { label: 'Wed', value: 3 }, { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 }, { label: 'Sat', value: 6 }
+const DAYS = [
+    { label: 'Mon', value: 0 }, 
+    { label: 'Tue', value: 1 }, 
+    { label: 'Wed', value: 2 },
+    { label: 'Thu', value: 3 }, 
+    { label: 'Fri', value: 4 }, 
+    { label: 'Sat', value: 5 }, 
+    { label: 'Sun', value: 6 }
   ];
 
   const fetchCourses = async () => {
