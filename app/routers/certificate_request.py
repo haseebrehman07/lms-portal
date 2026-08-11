@@ -20,7 +20,7 @@ from app.schemas.certificate_request import (
     CertificateRequestResponse
 )
 from app.core.deps import get_current_user, require_admin
-from app.services.certificate_pdf import generate_certificate_pdf
+from app.services.certificate_pdf import generate_certificate_pdf, generate_certificate_number
 
 router = APIRouter(prefix="/certificate-requests", tags=["Certificate Requests"])
 
@@ -174,9 +174,16 @@ def approve_certificate_request(
     ).first()
 
     if not existing_cert:
+        certificate_number = generate_certificate_number(
+            course.certificate_prefix if course else None,
+            now.year,
+            db
+        )
+
         certificate = Certificate(
             user_id=req.user_id,
-            course_id=req.course_id
+            course_id=req.course_id,
+            certificate_number=certificate_number
         )
         db.add(certificate)
         db.flush()  # get certificate.id before generating the PDF
@@ -186,6 +193,8 @@ def approve_certificate_request(
             course_title=course.title if course else "",
             issued_at=certificate.issued_at or now,
             certificate_id=certificate.id,
+            certificate_number=certificate_number,
+            certificate_template_url=course.certificate_template_url if course else None,
             user_id=req.user_id,
             course_id=req.course_id
         )

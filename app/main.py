@@ -30,6 +30,7 @@ from app.routers import enrollment_requests
 from app.routers import certificate_request
 from app.routers import Attendence
 from app.routers import chat
+from app.routers import fees
 
 
 logging.basicConfig(
@@ -112,6 +113,8 @@ app.include_router(enrollment_requests.router)
 app.include_router(certificate_request.router)
 app.include_router(Attendence.router)
 app.include_router(chat.router)
+app.include_router(fees.router)
+
 
 
 

@@ -33,10 +33,13 @@ ALLOWED_ASSIGNMENT_TYPES = [
     "text/plain"
 ]
 
+ALLOWED_RECEIPT_TYPES = ALLOWED_IMAGE_TYPES + ["application/pdf"]
+
 MAX_VIDEO_SIZE = 500 * 1024 * 1024      # 500MB
 MAX_IMAGE_SIZE = 5 * 1024 * 1024        # 5MB
 MAX_PDF_SIZE = 50 * 1024 * 1024         # 50MB
 MAX_ASSIGNMENT_SIZE = 100 * 1024 * 1024 # 100MB
+MAX_RECEIPT_SIZE = 10 * 1024 * 1024     # 10MB
 
 
 def get_r2_client():
@@ -112,6 +115,14 @@ def upload_assignment_file(
     content_type: str
 ) -> str:
     return upload_to_r2(file_content, "assignments", filename, content_type)
+
+
+def upload_fee_receipt(
+    file_content: bytes,
+    filename: str,
+    content_type: str
+) -> str:
+    return upload_to_r2(file_content, "fee_receipts", filename, content_type)
 
 
 def upload_certificate_pdf(

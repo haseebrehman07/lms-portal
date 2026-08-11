@@ -10,7 +10,9 @@ from app.models.certificate import Certificate
 from app.models.announcement import Announcement
 from app.models.token_blacklist import TokenBlacklist
 from app.models.class_cancellation import ClassCancellation
+from app.models.group_chat import GroupChat, GroupChatMessage
 from app.models.chat import ChatGroup, GroupMember, ChatMessage
+from app.models.fee import FeeStructure, FeeVoucher
 
 __all__ = [
     "User",
@@ -28,8 +30,12 @@ __all__ = [
     "Certificate",
     "Announcement",
     "TokenBlacklist",
-    "ClassCancellation"
+    "ClassCancellation",
+    "GroupChat",
+    "GroupChatMessage",
     "ChatGroup",
     "GroupMember",
-    "ChatMessage"
+    "ChatMessage",
+    "FeeStructure",
+    "FeeVoucher"
 ]

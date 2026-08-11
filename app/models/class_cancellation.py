@@ -55,7 +55,7 @@ class ClassCancellation(Base):
         nullable=False
     )
 
-    course = relationship("Course", foreign_keys=[course_id])
+    course = relationship("Course", foreign_keys=[course_id], back_populates="session_cancellations")
     created_by_user = relationship("User", foreign_keys=[created_by])
 
     def __repr__(self):
