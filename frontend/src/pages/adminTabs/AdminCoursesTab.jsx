@@ -30,8 +30,9 @@ const AdminCoursesTab = () => {
   const defaultFormState = { 
     id: null, title: '', instructor: '', timings: '', startDate: '', endDate: '', thumbnailUrl: '', 
     is_published: false, is_completed: false, attendance_enabled: false,
-    session_days: [0, 6], // Defaulting to Sun/Sat
-    attendance_cutoff_time: '', total_sessions: '', batch_start_date: ''
+    session_days: [0, 6], 
+    attendance_cutoff_time: '', total_sessions: '', batch_start_date: '',
+    certificate_prefix: '', certificate_template_url: '' // NEW FIELDS
   };
 
   const [formData, setFormData] = useState(defaultFormState);
@@ -96,7 +97,9 @@ const DAYS = [
         session_days: course.session_days || [0, 6],
         attendance_cutoff_time: course.attendance_cutoff_time || '',
         total_sessions: course.total_sessions || '',
-        batch_start_date: course.batch_start_date || ''
+        batch_start_date: course.batch_start_date || '',
+        certificate_prefix: course.certificate_prefix || '',
+        certificate_template_url: course.certificate_template_url || ''
       });
       fetchCancelledDates(course.id);
       setIsModalOpen(true);
@@ -160,7 +163,9 @@ const DAYS = [
       session_days: formData.session_days,
       attendance_cutoff_time: formData.attendance_cutoff_time || null,
       total_sessions: formData.total_sessions ? parseInt(formData.total_sessions) : null,
-      batch_start_date: formData.batch_start_date || null
+      batch_start_date: formData.batch_start_date || null,
+      certificate_prefix: formData.certificate_prefix || null,
+      certificate_template_url: formData.certificate_template_url || null
     };
 
     try {
@@ -450,6 +455,48 @@ const DAYS = [
                             <label className="block text-sm font-medium text-gray-700 mb-1">Course End Date</label>
                             <input type="date" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" />
                         </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-5 mt-5">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Certificate Prefix (e.g., CHRPE)</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g., CHRPE" 
+                          value={formData.certificate_prefix} 
+                          onChange={(e) => setFormData({...formData, certificate_prefix: e.target.value})} 
+                          className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-sm" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Custom Certificate Template</label>
+                        <label className="flex items-center justify-center w-full p-2 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                          <span className="text-sm text-gray-600 font-medium truncate">
+                            {formData.certificate_template_url ? 'Template Uploaded (Click to replace)' : 'Upload Background Image'}
+                          </span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={async (e) => {
+                              if (!e.target.files[0]) return;
+                              setIsUploading(true);
+                              const uploadData = new FormData();
+                              uploadData.append('file', e.target.files[0]);
+                              try {
+                                const res = await api.post('/uploads/certificate-template', uploadData, {
+                                  headers: { 'Content-Type': 'multipart/form-data' }
+                                });
+                                setFormData({...formData, certificate_template_url: res.data.url});
+                              } catch (err) {
+                                alert('Failed to upload template.');
+                              } finally {
+                                setIsUploading(false);
+                              }
+                            }} 
+                            disabled={isUploading} 
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>

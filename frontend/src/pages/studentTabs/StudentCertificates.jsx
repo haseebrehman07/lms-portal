@@ -73,7 +73,7 @@ const StudentCertificates = () => {
                 {/* UPDATED: Maps to course_title from backend */}
                 <h2 className="text-lg font-bold text-gray-900">{cert.course_title || 'Course Completion'}</h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Issued by <span className="font-semibold text-gray-800">Tech Titans University</span>
+                  Issued by <span className="font-semibold text-gray-800">Tech Titans</span>
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
                   Date Earned: {cert.issued_at ? new Date(cert.issued_at).toLocaleDateString() : 'N/A'}

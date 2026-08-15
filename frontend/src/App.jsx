@@ -6,6 +6,8 @@ import api from './api/axiosConfig';
 // Import the Route Guard
 import ProtectedRoute from './components/ProtectedRoute';
 
+import ChatLayout from './pages/chat/ChatLayout';
+
 import AdminLayout from './pages/AdminLayout';
 import CourseAllocationTab from './pages/adminTabs/CourseAllocationTab';
 import AdminCoursesTab from './pages/adminTabs/AdminCoursesTab';
@@ -16,6 +18,7 @@ import AdminReportsTab from './pages/adminTabs/AdminReportsTab';
 import AdminScheduleTab from './pages/adminTabs/AdminScheduleTab';
 import AdminCertificatesTab from './pages/adminTabs/AdminCertificatesTab';
 import AdminAttendanceTab from './pages/adminTabs/AdminAttendanceTab';
+import AdminFeesTab from './pages/adminTabs/AdminFeesTab'; // NEW IMPORT
 
 import Login from './pages/Login';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -86,6 +89,7 @@ function App() {
           <Route path="certificates" element={<StudentCertificates/>}/>
           <Route path="notifications" element={<StudentNotifications />} />
           <Route path="deadlines" element={<StudentDeadlines />} />
+          <Route path="chat" element={<ChatLayout />} />
         </Route>
 
         {/* PROTECTED ADMIN ROUTES */}
@@ -106,6 +110,8 @@ function App() {
           <Route path="reports" element={<AdminReportsTab />} />
           <Route path="schedule" element={<AdminScheduleTab />} />
           <Route path="certificates" element={<AdminCertificatesTab/>}/>
+          <Route path="fees" element={<AdminFeesTab />} /> {/* NEW ROUTE */}
+          <Route path="chat" element={<ChatLayout />} />
         </Route>
 
         {/* CATCH-ALL ROUTE (Redirects unknown URLs to login) */}

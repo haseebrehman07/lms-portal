@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Bell } from 'lucide-react';
+import { Search, Bell, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const TopNavbar = () => {
@@ -22,6 +22,12 @@ const TopNavbar = () => {
       {/* Right Side Actions */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
+        <button 
+          onClick={() => navigate(user.role === 'admin' || user.role === 'manager' ? '/admin/chat' : '/student/chat')}
+          className="relative p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors cursor-pointer mr-1"
+        >
+          <MessageSquare className="w-5 h-5" />
+        </button>
         <button 
           onClick={() => navigate('/student/notifications')}
           className="relative p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"

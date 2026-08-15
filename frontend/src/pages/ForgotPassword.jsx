@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Mail, Loader2, BookOpen, LineChart, Award, ArrowLeft } from 'lucide-react';
 import api from '../api/axiosConfig';
+import './Login.css';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -11,12 +13,10 @@ const ForgotPassword = () => {
   const handleRequest = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    setStatus({ message: '', type: '' }); // Clear previous messages
+    setStatus({ message: '', type: '' });
 
     try {
-      // Sends exactly what auth.py expects: { "email": "user@example.com" }
       await api.post('/auth/forgot-password', { email });
-      
       setStatus({ 
         message: 'If your email is registered, you will receive a reset link shortly.', 
         type: 'success' 
@@ -32,56 +32,90 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form onSubmit={handleRequest} className="p-8 w-full max-w-sm mx-auto bg-white rounded-xl shadow-sm border border-gray-100">
+    <div className="login-page-container">
+      <div className="login-split-card">
         
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Reset Password</h2>
-          <p className="text-sm text-gray-500">Enter your email to receive a reset link.</p>
-        </div>
-
-        {/* Dynamic Status Message */}
-        {status.message && (
-          <div className={`mb-5 p-3 text-sm rounded-lg text-center ${
-            status.type === 'success' 
-              ? 'bg-green-50 text-green-700 border border-green-200' 
-              : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
-            {status.message}
+        {/* Left Side: Branding */}
+        <div className="login-left-panel">
+          <div className="login-left-content">
+            <div className="logo-container">
+              <img 
+                src="https://pub-9ef90a63c4e64bdb9430fa540ae45e34.r2.dev/logo/ChatGPT%20Image%20Aug%205%2C%202026%2C%2001_08_27%20PM%20(1)%20(1).png" 
+                alt="Tech Titan Logo" 
+                className="brand-logo" 
+              />
+            </div>
+            <div className="brand-text">
+              <h1 className="brand-heading">Learn. Grow.<br /><span className="brand-heading-highlight">Lead the Future.</span></h1>
+              <p className="brand-subheading">Welcome to Tech Titan LMS - your all-in-one learning platform.</p>
+            </div>
+            <div className="illustration-placeholder"></div>
+            <div className="brand-features">
+              <div className="feature-item"><div className="feature-icon-wrapper"><BookOpen size={20} /></div><span>Smart Learning</span></div>
+              <div className="feature-item"><div className="feature-icon-wrapper"><LineChart size={20} /></div><span>Track Progress</span></div>
+              <div className="feature-item"><div className="feature-icon-wrapper"><Award size={20} /></div><span>Achieve More</span></div>
+            </div>
           </div>
-        )}
-
-        <div className="mb-5">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-          <input 
-            type="email" 
-            placeholder="Enter your email" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)} 
-            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            required 
-          />
         </div>
 
-        <div className="flex flex-col gap-3">
-          <button 
-            type="submit" 
-            disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:bg-blue-400"
-          >
-            {isLoading ? 'Sending...' : 'Send Reset Link'}
-          </button>
-          
-          <button 
-            type="button" 
-            onClick={() => navigate('/login')}
-            className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-2.5 rounded-lg transition-colors border border-gray-200"
-          >
-            Back to Login
-          </button>
+        {/* Right Side: Forgot Password Form */}
+        <div className="login-right-panel">
+          <div className="login-form-container">
+            <div className="form-header">
+              <h2>Reset Password</h2>
+              <p>Enter your email to receive a secure reset link.</p>
+            </div>
+            
+            {status.message && (
+              <div className={status.type === 'error' ? 'error-banner' : ''} style={status.type === 'success' ? { backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', padding: '12px', borderRadius: '8px', fontSize: '0.9rem', textAlign: 'center', marginBottom: '20px' } : {}}>
+                {status.message}
+              </div>
+            )}
+
+            <form onSubmit={handleRequest} className="login-form">
+              <div className="input-group">
+                <label>Email Address</label>
+                <div className="input-wrapper">
+                  <Mail className="input-icon" size={18} />
+                  <input 
+                    type="email" 
+                    placeholder="Enter your registered email"
+                    value={email} 
+                    onChange={(e) => setEmail(e.target.value)} 
+                    required 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
+                <button type="submit" disabled={isLoading} className="submit-btn">
+                  {isLoading ? <Loader2 className="w-5 h-5 mx-auto animate-spin" /> : 'Send Reset Link'}
+                </button>
+                
+                <button 
+                  type="button" 
+                  onClick={() => navigate('/login')}
+                  style={{ background: 'transparent', border: '1px solid #e2e8f0', color: '#475569', padding: '12px', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 0.2s' }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <ArrowLeft size={18} /> Back to Login
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className="login-footer">
+            <p>© 2026 Tech Titan LMS. All rights reserved.</p>
+            <div className="footer-links">
+              <span>Privacy Policy</span><span className="separator">|</span>
+              <span>Terms of Service</span><span className="separator">|</span>
+              <span>Help Center</span>
+            </div>
+          </div>
         </div>
 
-      </form>
+      </div>
     </div>
   );
 };

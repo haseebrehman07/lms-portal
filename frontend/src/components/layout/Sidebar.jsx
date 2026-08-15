@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, BookOpen, Route, Calendar, Award, 
   MessageSquare, Users, Bell, Settings, ClipboardCheck, 
-  FileBarChart, Megaphone, CheckSquare, UserCheck, Receipt, LogOut, Clock3
+  FileBarChart, Megaphone, CheckSquare, UserCheck, Receipt, LogOut, Clock3, CreditCard
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
@@ -19,13 +19,14 @@ const Sidebar = ({ role = 'student' }) => {
     { name: 'Courses', icon: BookOpen, path: '/admin/courses' },
     { name: 'Users', icon: Users, path: '/admin/users' },
     { name: 'Enrollments', icon: ClipboardCheck, path: '/admin/enrollments' },
-    { name: 'Training Schedule', icon: Clock3, path: '/admin/schedule'},
-    // NEW: Admin Attendance Tab added here!
+    //{ name: 'Training Schedule', icon: Clock3, path: '/admin/schedule'},
     { name: 'Attendance', icon: UserCheck, path: '/admin/attendance' },
     { name: 'Reports', icon: FileBarChart, path: '/admin/reports' },
     { name: 'Certificates', icon: Award, path: '/admin/certificates' },
+    { name: 'Fees & Ledger', icon: CreditCard, path: '/admin/fees' }, // NEW ADMIN FEES TAB
     { name: 'Announcements', icon: Megaphone, path: '/admin/announcements' },
     { name: 'Settings', icon: Settings, path: '/admin/settings' },
+    { name: 'Group Chat', icon: MessageSquare, path: '/admin/chat' },
   ];
 
   const studentLinks = [
@@ -37,7 +38,8 @@ const Sidebar = ({ role = 'student' }) => {
    // { name: 'Calendar', icon: Calendar, path: '/student/timetable' },
     { name: 'Certificates', icon: Award, path: '/student/certificates' },
     { name: 'Notifications', icon: Bell, path: '/student/notifications' },
-   // { name: 'Fees', icon: Receipt, path: '/student/fees' },
+    { name: 'Fees', icon: Receipt, path: '/student/fees' }, // UNCOMMENTED STUDENT FEES TAB
+    { name: 'Group Chat', icon: MessageSquare, path: '/student/chat' },
   ];
 
   const navItems = role === 'admin' ? adminLinks : studentLinks;
