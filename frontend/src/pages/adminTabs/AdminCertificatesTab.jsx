@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Plus, Download, Trash2, Loader2, AlertCircle, X, Check, XCircle } from 'lucide-react';
+import { Award, Plus, Download, Trash2, Loader2, AlertCircle, X, Check, XCircle, Upload } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const AdminCertificatesTab = () => {
@@ -14,12 +14,12 @@ const AdminCertificatesTab = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newCert, setNewCert] = useState({ user_id: '', course_id: '' });
+  const [customFile, setCustomFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      // Added .catch() to prevent a single missing route from crashing the page
       const [certsRes, reqsRes, coursesRes] = await Promise.all([
         api.get('/certificates/admin/all').catch(() => ({ data: [] })),
         api.get('/certificate-requests').catch(() => ({ data: [] })),
@@ -54,6 +54,11 @@ const AdminCertificatesTab = () => {
     return user ? user.name : 'Unknown User';
   };
 
+  // Check if a certificate already exists for the selected student and course
+  const existingCert = issuedCerts.find(
+    c => c.user_id === newCert.user_id && c.course_id === newCert.course_id
+  );
+
   // --- ACTIONS ---
 
   const handleIssueCertificate = async (e) => {
@@ -64,9 +69,28 @@ const AdminCertificatesTab = () => {
     
     try {
       setIsSubmitting(true);
-      await api.post('/certificates/admin/issue', newCert);
+      let payload = { ...newCert };
+
+      // If the admin uploaded a custom file, route it to the correct storage endpoint first
+      if (customFile) {
+        const formData = new FormData();
+        formData.append('file', customFile);
+        
+        const endpoint = customFile.type === 'application/pdf' ? '/uploads/pdf' : '/uploads/thumbnail';
+        const uploadRes = await api.post(endpoint, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        // Attach the newly generated cloud URL to the certificate payload
+        payload.certificate_url = uploadRes.data.url;
+      }
+
+      // Submit the final payload to issue or replace the certificate
+      await api.post('/certificates/admin/issue', payload);
+      
       setIsModalOpen(false);
       setNewCert({ user_id: '', course_id: '' });
+      setCustomFile(null);
       fetchData(); 
     } catch (err) {
       console.error('Error issuing certificate:', err);
@@ -89,7 +113,6 @@ const AdminCertificatesTab = () => {
 
   const handleRequestAction = async (requestId, action) => {
     try {
-      // Action is either 'approve' or 'reject'
       await api.patch(`/certificate-requests/${requestId}/${action}`, {
           admin_note: `Actioned by Admin`
       });
@@ -98,6 +121,12 @@ const AdminCertificatesTab = () => {
       console.error(`Error processing request:`, err);
       alert(err.response?.data?.detail || `Failed to ${action} request.`);
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setNewCert({ user_id: '', course_id: '' });
+    setCustomFile(null);
   };
 
   if (isLoading) {
@@ -248,13 +277,13 @@ const AdminCertificatesTab = () => {
         </div>
       </div>
 
-      {/* --- MANUAL ISSUE MODAL --- */}
+      {/* --- MANUAL ISSUE & UPLOAD MODAL --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h3 className="text-lg font-bold text-gray-900">Manually Issue Certificate</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -289,13 +318,46 @@ const AdminCertificatesTab = () => {
                       <option key={c.id} value={c.id}>{c.title}</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-2 italic">Note: The student must be enrolled in the course to manually issue a certificate.</p>
+              </div>
+
+              {/* Real-time Replacement Notice */}
+              {existingCert && (
+                <div className="bg-blue-50 text-blue-700 border border-blue-200 p-3 rounded-lg text-sm flex items-start gap-2 shadow-sm">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Certificate already exists</strong> for this student in this course. Submitting this form will permanently replace their existing certificate.
+                  </p>
+                </div>
+              )}
+
+              {/* Custom File Upload */}
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Custom Certificate File (Optional)</label>
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <Upload className={`w-6 h-6 mb-2 ${customFile ? 'text-blue-500' : 'text-gray-400'}`} />
+                      <p className="text-xs text-gray-600 text-center px-4 font-medium">
+                        {customFile ? customFile.name : 'Upload PNG, JPG, or PDF'}
+                      </p>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/png, image/jpeg, application/pdf" 
+                      className="hidden" 
+                      onChange={(e) => setCustomFile(e.target.files[0])} 
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-2 italic text-center">
+                  Leave this blank to auto-generate a standard certificate instead.
+                </p>
               </div>
               
-              <div className="pt-4 flex justify-end gap-3">
+              <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 mt-4">
                 <button 
                   type="button" 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={handleCloseModal}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors"
                 >
                   Cancel
@@ -303,10 +365,10 @@ const AdminCertificatesTab = () => {
                 <button 
                   type="submit" 
                   disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-70 shadow-sm"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Issue Certificate
+                  {existingCert ? 'Replace Certificate' : 'Issue Certificate'}
                 </button>
               </div>
             </form>
