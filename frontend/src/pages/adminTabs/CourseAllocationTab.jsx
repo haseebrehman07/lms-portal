@@ -84,7 +84,7 @@ const AdminHomeTab = () => {
         api.get('/dashboard/recent-enrollments'),
         api.get('/dashboard/top-courses'),
         api.get('/courses'),
-        api.get('/dashboard/upcoming-poster').catch(() => ({ data: { url: null } })) // Fallback if endpoint doesn't exist yet
+        api.get('/dashboard/upcoming-poster').catch(() => ({ data: { url: null } })) 
       ]);
 
       const newErrors = {};
@@ -113,21 +113,24 @@ const AdminHomeTab = () => {
     fetchData();
   }, []);
 
-  // Cloudflare Upload Handler
   const handlePosterUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setIsUploading(true);
+    
     try {
-      // NOTE: Replace this with your actual Cloudflare component/API upload logic
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.post('/dashboard/upcoming-poster', formData, {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      const uploadRes = await api.post('/uploads/thumbnail', uploadData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setPosterUrl(res.data.url);
+      
+      const newImageUrl = uploadRes.data.url;
+      await api.post('/dashboard/upcoming-poster', { url: newImageUrl });
+      setPosterUrl(newImageUrl);
     } catch (err) {
       console.error("Poster upload failed:", err);
+      alert(err.response?.data?.detail || "Failed to upload poster.");
     } finally {
       setIsUploading(false);
     }
@@ -139,6 +142,7 @@ const AdminHomeTab = () => {
       setPosterUrl(null);
     } catch (err) {
       console.error("Poster removal failed:", err);
+      alert("Failed to remove poster.");
     }
   };
 
@@ -162,7 +166,7 @@ const AdminHomeTab = () => {
   const firstName = currentUser?.name?.split(' ')[0];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 p-4 sm:p-6">
       
       {/* Header */}
       <div>
@@ -172,60 +176,73 @@ const AdminHomeTab = () => {
         </p>
       </div>
 
-      {/* Top Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div onClick={() => navigate('/admin/users')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-blue-200 transition-colors shadow-sm">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Users className="w-6 h-6" /></div>
+      {/* Top Stats Row (Permanent Colored Borders with Enhanced Hovers) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        <div 
+          onClick={() => navigate('/admin/users')} 
+          className="bg-white p-6 rounded-2xl border-2 border-blue-200 flex items-center gap-4 cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-blue-50 text-blue-600 rounded-xl"><Users className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Total Students</p>
             <p className="text-2xl font-bold text-gray-900">{stats.total_students}</p>
           </div>
         </div>
 
-        <div onClick={() => navigate('/admin/courses')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-emerald-200 transition-colors shadow-sm">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><BookOpen className="w-6 h-6" /></div>
+        <div 
+          onClick={() => navigate('/admin/courses')} 
+          className="bg-white p-6 rounded-2xl border-2 border-emerald-200 flex items-center gap-4 cursor-pointer hover:border-emerald-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl"><BookOpen className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Total Courses</p>
             <p className="text-2xl font-bold text-gray-900">{stats.total_courses}</p>
           </div>
         </div>
 
-        <div onClick={() => navigate('/admin/enrollments')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-orange-200 transition-colors shadow-sm">
-          <div className="p-3 bg-orange-50 text-orange-500 rounded-xl"><UserCheck className="w-6 h-6" /></div>
+        <div 
+          onClick={() => navigate('/admin/enrollments')} 
+          className="bg-white p-6 rounded-2xl border-2 border-orange-200 flex items-center gap-4 cursor-pointer hover:border-orange-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-orange-50 text-orange-500 rounded-xl"><UserCheck className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Total Enrollments</p>
             <p className="text-2xl font-bold text-gray-900">{stats.total_enrollments}</p>
           </div>
         </div>
 
-        <div onClick={() => navigate('/admin/certificates')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-purple-200 transition-colors shadow-sm">
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><Trophy className="w-6 h-6" /></div>
+        <div 
+          onClick={() => navigate('/admin/certificates')} 
+          className="bg-white p-6 rounded-2xl border-2 border-purple-200 flex items-center gap-4 cursor-pointer hover:border-purple-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-purple-50 text-purple-600 rounded-xl"><Trophy className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Certificates Issued</p>
             <p className="text-2xl font-bold text-gray-900">{stats.certificates_issued}</p>
           </div>
         </div>
+
       </div>
 
       {/* Main Grid: Left & Right Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column */}
+        {/* === LEFT COLUMN === */}
         <div className="space-y-6">
           
           {/* Upcoming Interactive Session Poster Management */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-gray-900">Upcoming Interactive Session</h3>
+              <h3 className="text-lg font-bold text-gray-900">Interactive Session</h3>
               {posterUrl && (
-                <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full">
-                  <CheckCircle2 className="w-4 h-4" /> Active on Student Side
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full shrink-0">
+                  <CheckCircle2 className="w-4 h-4" /> <span className="hidden sm:inline">Active</span>
                 </span>
               )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
-              {/* Poster Preview / Upload Area */}
               <div className="w-full sm:w-64 h-36 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl relative flex items-center justify-center overflow-hidden shrink-0 group">
                 {isUploading ? (
                   <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -234,7 +251,7 @@ const AdminHomeTab = () => {
                     <img src={posterUrl} alt="Session Poster" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <label className="cursor-pointer text-white font-medium text-sm flex items-center gap-2 hover:underline">
-                        <UploadCloud className="w-4 h-4" /> Replace Image
+                        <UploadCloud className="w-4 h-4" /> Replace
                         <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} />
                       </label>
                     </div>
@@ -249,16 +266,15 @@ const AdminHomeTab = () => {
               </div>
 
               <div className="flex-1 flex flex-col justify-center">
-                <h4 className="font-bold text-gray-900 mb-1">Session Poster</h4>
-                <p className="text-sm text-gray-500 mb-4">
-                  Upload an image to announce an upcoming live session. This will be prominently displayed on the student dashboard. Recommended size: 16:9 ratio.
+                <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                  Upload an image to announce an upcoming live session to students. Recommended: 16:9 ratio.
                 </p>
                 {posterUrl && (
                   <button 
                     onClick={handleRemovePoster}
                     className="self-start px-4 py-2 border border-red-100 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                   >
-                    <X className="w-4 h-4" /> Remove Poster
+                    <X className="w-4 h-4" /> Remove
                   </button>
                 )}
               </div>
@@ -266,7 +282,7 @@ const AdminHomeTab = () => {
           </div>
 
           {/* Training Progress */}
-          <div onClick={() => navigate('/admin/reports')} className="bg-white p-6 rounded-2xl border border-gray-100 cursor-pointer hover:border-blue-200 hover:shadow-md transition-all group">
+          <div onClick={() => navigate('/admin/reports')} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:border-blue-200 hover:shadow-md transition-all group">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">Training Progress</h3>
               <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-transform group-hover:translate-x-1" />
@@ -276,26 +292,35 @@ const AdminHomeTab = () => {
             ) : stats.total_enrollments === 0 ? (
               <p className="text-sm text-gray-500">No enrollments yet.</p>
             ) : (
-              <div className="flex items-center justify-around">
-                <div className="relative w-32 h-32 rounded-full flex items-center justify-center" style={donutStyle}>
+              <div className="flex flex-col sm:flex-row items-center justify-around gap-6">
+                <div className="relative w-32 h-32 rounded-full flex items-center justify-center shrink-0" style={donutStyle}>
                   <div className="absolute w-24 h-24 bg-white rounded-full flex items-center justify-center">
                     <div className="text-center">
                       <p className="text-2xl font-bold text-gray-900">{completed_percent}%</p>
-                      <p className="text-[10px] text-gray-500">Completed</p>
+                      <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Completed</p>
                     </div>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-blue-500"></span><span className="text-gray-600">Completed</span><span className="font-bold ml-4">{completed_percent}%</span></div>
-                  <div className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-yellow-400"></span><span className="text-gray-600">In Progress</span><span className="font-bold ml-4">{in_progress_percent}%</span></div>
-                  <div className="flex items-center gap-2 text-sm"><span className="w-2 h-2 rounded-full bg-red-400"></span><span className="text-gray-600">Not Started</span><span className="font-bold ml-4">{not_started_percent}%</span></div>
+                <div className="space-y-3 w-full sm:w-auto">
+                  <div className="flex items-center justify-between sm:justify-start gap-4 text-sm">
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span><span className="text-gray-600 font-medium">Completed</span></div>
+                    <span className="font-bold text-gray-900">{completed_percent}%</span>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-start gap-4 text-sm">
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400"></span><span className="text-gray-600 font-medium">In Progress</span></div>
+                    <span className="font-bold text-gray-900">{in_progress_percent}%</span>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-start gap-4 text-sm">
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-red-400"></span><span className="text-gray-600 font-medium">Not Started</span></div>
+                    <span className="font-bold text-gray-900">{not_started_percent}%</span>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
           {/* Upcoming Classes */}
-          <div onClick={() => navigate('/admin/courses')} className="bg-white p-6 rounded-2xl border border-gray-100 cursor-pointer hover:border-blue-200 transition-all group hover:shadow-md">
+          <div onClick={() => navigate('/admin/courses')} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:border-blue-200 transition-all group hover:shadow-md">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">Upcoming Classes</h3>
               <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-transform group-hover:translate-x-1" />
@@ -304,13 +329,13 @@ const AdminHomeTab = () => {
             {upcomingClasses.length > 0 ? (
               <div className="space-y-4">
                 {upcomingClasses.map((cls, idx) => (
-                  <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
-                    <div className="bg-blue-100 text-blue-700 p-3 rounded-lg flex flex-col items-center justify-center min-w-[3.5rem]">
+                  <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-transparent hover:border-blue-100 transition-colors">
+                    <div className="bg-blue-100 text-blue-700 p-3 rounded-lg flex flex-col items-center justify-center min-w-[3.5rem] shrink-0">
                       <span className="text-xs font-bold uppercase">{cls.date.toLocaleDateString('en-US', { month: 'short' })}</span>
                       <span className="text-lg font-black leading-tight">{cls.date.getDate()}</span>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-sm">{cls.courseName}</h4>
+                    <div className="overflow-hidden">
+                      <h4 className="font-bold text-gray-900 text-sm truncate">{cls.courseName}</h4>
                       <p className="text-xs font-medium text-gray-500 mt-0.5">{cls.dayName} Session</p>
                     </div>
                   </div>
@@ -318,18 +343,19 @@ const AdminHomeTab = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center text-center py-6 text-gray-400">
-                <CalendarX className="w-8 h-8 mb-2" />
+                <CalendarX className="w-8 h-8 mb-2 opacity-50" />
                 <p className="text-sm">No upcoming classes scheduled yet.</p>
               </div>
             )}
           </div>
+
         </div>
 
-        {/* Right Column */}
+        {/* === RIGHT COLUMN === */}
         <div className="space-y-6">
           
           {/* Dynamic Recent Enrollments */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 flex flex-col">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
             <h3 className="text-lg font-bold text-gray-900 mb-6">Recent Enrollments</h3>
             <div className="space-y-4 flex-1">
               {errors.recent ? (
@@ -338,15 +364,19 @@ const AdminHomeTab = () => {
                 recentEnrollments.map((enr) => (
                   <div key={enr.id || enr.course_name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 uppercase">{enr.student_name ? enr.student_name.charAt(0) : 'U'}</div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900 text-sm">{enr.course_name}</h4>
-                        <p className="text-xs text-gray-500">{enr.student_name}</p>
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-600 uppercase shrink-0">
+                        {enr.student_name ? enr.student_name.charAt(0) : 'U'}
+                      </div>
+                      <div className="overflow-hidden pr-2">
+                        <h4 className="font-semibold text-gray-900 text-sm truncate">{enr.course_name}</h4>
+                        <p className="text-xs text-gray-500 truncate">{enr.student_name}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-xs text-gray-400">{formatDate(enr.date)}</p>
-                      <span className={`text-xs font-medium capitalize px-2 py-1 rounded-full ${statusStyles[enr.status?.toLowerCase()] || 'text-gray-500 bg-gray-100'}`}>{enr.status ? enr.status.replace('_', ' ') : 'Unknown'}</span>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <p className="text-xs text-gray-400 hidden sm:block">{formatDate(enr.date)}</p>
+                      <span className={`text-xs font-medium capitalize px-2 py-1 rounded-full ${statusStyles[enr.status?.toLowerCase()] || 'text-gray-500 bg-gray-100'}`}>
+                        {enr.status ? enr.status.replace('_', ' ') : 'Unknown'}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -362,7 +392,7 @@ const AdminHomeTab = () => {
           </div>
 
           {/* Dynamic Top Courses */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 flex flex-col">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
             <h3 className="text-lg font-bold text-gray-900 mb-6">Top Courses</h3>
             <div className="space-y-5 flex-1">
               {errors.top ? (
@@ -370,9 +400,9 @@ const AdminHomeTab = () => {
               ) : topCourses.length > 0 ? (
                 topCourses.map((course, idx) => (
                   <div key={course.id || idx}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-gray-700">{idx + 1}. {course.title}</span>
-                      <span className="font-bold text-gray-900">{course.enrollments} enrolled</span>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span className="font-medium text-gray-700 truncate pr-4">{idx + 1}. {course.title}</span>
+                      <span className="font-bold text-gray-900 shrink-0">{course.enrollments} enrolled</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5">
                       <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${(course.enrollments / maxEnrollments) * 100}%` }}></div>

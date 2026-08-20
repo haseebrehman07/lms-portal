@@ -25,7 +25,7 @@ const Sidebar = ({ role = 'student' }) => {
     { name: 'Certificates', icon: Award, path: '/admin/certificates' },
     { name: 'Fees & Ledger', icon: CreditCard, path: '/admin/fees' }, // NEW ADMIN FEES TAB
     { name: 'Announcements', icon: Megaphone, path: '/admin/announcements' },
-    { name: 'Settings', icon: Settings, path: '/admin/settings' },
+    //{ name: 'Settings', icon: Settings, path: '/admin/settings' },
     { name: 'Group Chat', icon: MessageSquare, path: '/admin/chat' },
   ];
 

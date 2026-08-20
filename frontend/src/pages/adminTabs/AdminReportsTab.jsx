@@ -17,7 +17,6 @@ const AdminReportsTab = () => {
       setIsLoading(true);
       setError(null);
       
-      // Wire to actual backend endpoints
       const [completionsRes, performanceRes] = await Promise.all([
         api.get('/reports/completions'),
         api.get('/reports/course-performance')
@@ -26,39 +25,43 @@ const AdminReportsTab = () => {
       // 1. Process Activity Trends (Completions)
       const trendRaw = completionsRes.data;
       let mappedTrend = [];
+      
       if (Array.isArray(trendRaw)) {
         mappedTrend = trendRaw.map(item => ({ 
           name: item.month || item.date || item.name || 'Unknown', 
-          current: item.count || item.completions || item.value || 0 
+          current: Number(item.count || item.completions || item.value || item.current || 0) 
         }));
-      } else if (typeof trendRaw === 'object') {
-        mappedTrend = Object.entries(trendRaw).map(([key, val]) => ({ name: key, current: val }));
       }
       setTrendData(mappedTrend);
 
       // 2. Process Status Overview (Course Performance)
+      // The backend returns an array of COURSES. We need to sum up the statuses across all courses.
       const perfRaw = performanceRes.data;
-      let mappedPerf = [];
-      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
       
-      if (Array.isArray(perfRaw)) {
-        mappedPerf = perfRaw.map((item, i) => ({ 
-          name: (item.status || item.name || 'Unknown').replace('_', ' ').toUpperCase(), 
-          value: item.count || item.value || 0, 
-          color: colors[i % colors.length] 
-        }));
-      } else if (typeof perfRaw === 'object') {
-        mappedPerf = Object.entries(perfRaw).map(([key, val], i) => ({ 
-          name: key.replace('_', ' ').toUpperCase(), 
-          value: val, 
-          color: colors[i % colors.length] 
-        }));
-      }
-      setDistributionData(mappedPerf);
+      let totalCompleted = 0;
+      let totalInProgress = 0;
+      let totalNotStarted = 0;
 
-      // 3. Generate Basic Summary Stats from the pulled data
+      if (Array.isArray(perfRaw)) {
+        perfRaw.forEach(course => {
+          totalCompleted += Number(course.completed || 0);
+          totalInProgress += Number(course.in_progress || 0);
+          totalNotStarted += Number(course.not_started || 0);
+        });
+      }
+
+      const mappedPerf = [
+        { name: 'COMPLETED', value: totalCompleted, color: '#10b981' }, // Emerald
+        { name: 'IN PROGRESS', value: totalInProgress, color: '#3b82f6' }, // Blue
+        { name: 'NOT STARTED', value: totalNotStarted, color: '#ef4444' }  // Red
+      ];
+      
+      // Only keep statuses that actually have a count > 0 so empty slices don't crash Recharts
+      setDistributionData(mappedPerf.filter(stat => stat.value > 0));
+
+      // 3. Generate Basic Summary Stats
       const totalCompletions = mappedTrend.reduce((sum, item) => sum + item.current, 0);
-      const totalEnrollments = mappedPerf.reduce((sum, item) => sum + item.value, 0);
+      const totalEnrollments = totalCompleted + totalInProgress + totalNotStarted;
       
       setSummaryStats([
         { title: 'Total Enrollments', value: totalEnrollments },
@@ -80,12 +83,10 @@ const AdminReportsTab = () => {
   const handleExportPDF = async () => {
     setIsExporting(true);
     try {
-      // Hit the actual backend route that generates the PDF
       const response = await api.get('/reports/export-pdf', { 
-        responseType: 'blob' // Essential for handling binary files
+        responseType: 'blob' 
       });
       
-      // Create a temporary link to force the browser to download the blob
       const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -93,7 +94,6 @@ const AdminReportsTab = () => {
       document.body.appendChild(link);
       link.click();
       
-      // Cleanup
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {

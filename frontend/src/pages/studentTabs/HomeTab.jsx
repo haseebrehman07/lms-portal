@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, CheckCircle, Clock, Award, Loader2, AlertCircle, ArrowRight, CalendarX, ImageIcon } from 'lucide-react';
+import { BookOpen, CheckCircle, Award, Loader2, AlertCircle, ArrowRight, ImageIcon } from 'lucide-react';
 import api from '../../api/axiosConfig';
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -96,11 +96,11 @@ const StudentDashboard = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 p-4 sm:p-6">
       
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.name}! 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user.name}! </h1>
         <p className="text-sm text-gray-500 mt-1">Keep learning, keep growing.</p>
       </div>
 
@@ -111,39 +111,42 @@ const StudentDashboard = () => {
         </div>
       )}
 
-      {/* Top Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div onClick={() => navigate('/student/courses')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-blue-200 hover:shadow-md transition-all">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><BookOpen className="w-6 h-6" /></div>
+      {/* Top Stats Row (3 Columns, Perfect Width, Permanent Base Colors + Enhanced Hovers) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <div 
+          onClick={() => navigate('/student/courses')} 
+          className="bg-white p-6 rounded-2xl border-2 border-blue-200 flex items-center gap-4 cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-blue-50 text-blue-600 rounded-xl"><BookOpen className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Courses Enrolled</p>
             <p className="text-2xl font-bold text-gray-900">{dashboardData.enrollments.length}</p>
           </div>
         </div>
 
-        <div onClick={() => navigate('/student/certificates')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-emerald-200 hover:shadow-md transition-all">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
+        <div 
+          onClick={() => navigate('/student/certificates')} 
+          className="bg-white p-6 rounded-2xl border-2 border-emerald-200 flex items-center gap-4 cursor-pointer hover:border-emerald-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Courses Completed</p>
             <p className="text-2xl font-bold text-gray-900">{dashboardData.certificates.length}</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm">
-          <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl"><Clock className="w-6 h-6" /></div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Learning Hours</p>
-            <p className="text-2xl font-bold text-gray-900">--</p>
-          </div>
-        </div>
-
-        <div onClick={() => navigate('/student/certificates')} className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-orange-200 hover:shadow-md transition-all">
-          <div className="p-3 bg-orange-50 text-orange-500 rounded-xl"><Award className="w-6 h-6" /></div>
+        <div 
+          onClick={() => navigate('/student/certificates')} 
+          className="bg-white p-6 rounded-2xl border-2 border-orange-200 flex items-center gap-4 cursor-pointer hover:border-orange-500 hover:shadow-lg transition-all"
+        >
+          <div className="p-3.5 bg-orange-50 text-orange-500 rounded-xl"><Award className="w-6 h-6" /></div>
           <div>
             <p className="text-sm text-gray-500 font-medium">Certificates Earned</p>
             <p className="text-2xl font-bold text-gray-900">{dashboardData.certificates.length}</p>
           </div>
         </div>
+
       </div>
 
       {/* Main Grid */}
@@ -171,7 +174,7 @@ const StudentDashboard = () => {
           </div>
         </div>
 
-        {/* Notifications (Moved to the smaller right column) */}
+        {/* Notifications Column */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 flex flex-col shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-gray-900">Recent Notifications</h3>
@@ -207,7 +210,7 @@ const StudentDashboard = () => {
           </div>
         </div>
 
-        {/* Upcoming Classes (Moved to the full-width bottom row) */}
+        {/* Upcoming Classes */}
         <div className="lg:col-span-3 bg-white p-6 rounded-2xl border border-gray-100 flex flex-col shadow-sm">
           <h3 className="text-lg font-bold text-gray-900 mb-6">Upcoming Classes</h3>
           
