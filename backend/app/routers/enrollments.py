@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session, contains_eager
 from typing import List, Optional
 from uuid import UUID
 from app.database import get_db
-from app.models.enrollment import Enrollment, EnrollmentStatusEnum
-from app.models.lesson import Lesson
+from app.models.enrollment import Enrollment, EnrollmentStatusEnum, LessonProgress
+from app.models.lessons import Lesson
 from app.models.course import Course
 from app.models.user import User
 from app.schemas.enrollment import (
@@ -15,9 +15,51 @@ from app.schemas.enrollment import (
     BulkEnrollResult
 )
 from app.core.deps import get_current_user, require_admin, require_manager_or_admin
-from app.services.progress import mark_lesson_progress_complete
+from app.services.progress import mark_lesson_progress_complete, recalculate_progress
 
 router = APIRouter(tags=["Enrollments"])
+
+@router.post(
+    "/lessons/{lesson_id}/incomplete",
+    status_code=status.HTTP_200_OK
+)
+def incomplete_lesson(
+    lesson_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    enrollment = db.query(Enrollment).filter(
+        Enrollment.user_id == current_user.id,
+        Enrollment.course_id == lesson.course_id
+    ).first()
+    if not enrollment:
+        raise HTTPException(status_code=400, detail="Not enrolled")
+
+    progress = db.query(LessonProgress).filter(
+        LessonProgress.enrollment_id == enrollment.id,
+        LessonProgress.lesson_id == lesson_id
+    ).first()
+
+    if progress:
+        db.delete(progress)
+        db.commit()
+
+    # Reuse the SAME recalculation logic used by mark_lesson_progress_complete,
+    # instead of duplicating the math here - there's only one source of
+    # truth for "how many lessons exist" and "how is percent computed",
+    # used everywhere progress changes.
+    recalculate_progress(enrollment.id, db)
+
+    db.refresh(enrollment)
+    return {
+        "message": "Lesson marked as incomplete",
+        "progress_percent": enrollment.progress_percent,
+        "status": enrollment.status.value
+    }
 
 
 @router.post(
@@ -258,5 +300,9 @@ def complete_lesson(
         "message": "Lesson marked as complete",
         "progress_percent": enrollment.progress_percent,
         "status": enrollment.status.value,
+        # Note: with the new admin-controlled completion design, this
+        # will now only ever be True if an admin already marked the
+        # whole course completed before this lesson was touched -
+        # finishing the last lesson yourself no longer flips this.
         "course_completed": enrollment.status == EnrollmentStatusEnum.completed
     }

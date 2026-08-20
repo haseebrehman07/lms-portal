@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from uuid import UUID
 from app.database import get_db
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.Module import Module
 from app.models.course import Course
 from app.schemas.lesson import LessonCreate, LessonUpdate, LessonResponse

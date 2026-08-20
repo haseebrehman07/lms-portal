@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ router = APIRouter(prefix="/certificates", tags=["Certificates"])
 class AdminIssueCertificate(BaseModel):
     user_id: UUID
     course_id: UUID
+    certificate_url: Optional[str] = None  # Added to accept custom frontend uploads[cite: 13]
 
 
 def _to_response(cert: Certificate) -> dict:
@@ -98,27 +99,32 @@ def admin_issue_certificate(
         Certificate.user_id == payload.user_id,
         Certificate.course_id == payload.course_id
     ).first()
+    
+    # OVERWRITE LOGIC: Update existing instead of rejecting[cite: 13]
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A certificate already exists for this user and course"
+        certificate = existing
+        certificate.issued_at = datetime.now(timezone.utc)
+    else:
+        certificate = Certificate(
+            user_id=payload.user_id,
+            course_id=payload.course_id
         )
+        db.add(certificate)
+        db.flush()
 
-    certificate = Certificate(
-        user_id=payload.user_id,
-        course_id=payload.course_id
-    )
-    db.add(certificate)
-    db.flush()
-
-    certificate.certificate_url = generate_certificate_pdf(
-        learner_name=user.name,
-        course_title=course.title,
-        issued_at=certificate.issued_at or datetime.now(timezone.utc),
-        certificate_id=certificate.id,
-        user_id=user.id,
-        course_id=course.id
-    )
+    # Apply custom upload URL if provided, otherwise auto-generate[cite: 13]
+    if payload.certificate_url:
+        certificate.certificate_url = payload.certificate_url
+    else:
+        certificate.certificate_url = generate_certificate_pdf(
+            learner_name=user.name,
+            course_title=course.title,
+            issued_at=certificate.issued_at or datetime.now(timezone.utc),
+            certificate_id=certificate.id,
+            user_id=user.id,
+            course_id=course.id
+        )
+        
     db.commit()
     db.refresh(certificate)
 

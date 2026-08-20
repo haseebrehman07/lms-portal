@@ -5,7 +5,7 @@ from uuid import UUID
 from typing import Optional, List
 from app.database import get_db
 from app.models.course import Course, CourseTypeEnum
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.enrollment import Enrollment, LessonProgress
 from app.models.user import User, RoleEnum
 from app.schemas.course import CourseCreate, CourseUpdate, CourseResponse
@@ -122,11 +122,6 @@ def get_course_detail(
 
     def lesson_payload(lesson):
         progress = lesson_progress_map.get(str(lesson.id))
-        # Enrolled users and staff see everything. Everyone else only
-        # gets the actual content (video/pdf/text) if this specific
-        # lesson is marked as a free preview - otherwise it's locked,
-        # though the title/type/order still show so they can see the
-        # syllabus before enrolling.
         unlocked = can_see_full_content or lesson.is_free_preview
 
         return {
@@ -136,6 +131,7 @@ def get_course_detail(
             "order_index": lesson.order_index,
             "duration_seconds": lesson.duration_seconds,
             "video_url": lesson.video_url if unlocked else None,
+            "thumbnail_url": getattr(lesson, "thumbnail_url", None),
             "pdf_url": lesson.pdf_url if unlocked else None,
             "content": lesson.content if unlocked else None,
             "is_free_preview": lesson.is_free_preview,
@@ -144,44 +140,12 @@ def get_course_detail(
             "time_spent_seconds": progress.time_spent_seconds if progress else 0
         }
 
+    # FIX: We must actually execute the mapper and return the payload to the frontend!
     return {
         "id": str(course.id),
         "title": course.title,
-        "description": course.description,
-        "thumbnail_url": course.thumbnail_url,
-        "instructor_name": course.instructor_name,
-        "type": course.type.value if course.type else None,
-        "total_lessons": course.total_lessons,
-        "is_published": course.is_published,
-        "is_enrolled": enrollment is not None,
-        "progress_percent": enrollment.progress_percent if enrollment else 0,
-        "enrollment_status": (
-            enrollment.status.value if enrollment else "not_enrolled"
-        ),
-        "lessons": [lesson_payload(lesson) for lesson in lessons]
+        "lessons": [lesson_payload(l) for l in lessons]
     }
-
-
-@router.get("/{course_id}", response_model=CourseResponse)
-def get_course(
-    course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
-):
-    course = db.query(Course).filter(
-        Course.id == course_id
-    ).first()
-    if not course:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    if not course.is_published and not _is_staff(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Course not found"
-        )
-    return course
 
 
 @router.post(
@@ -271,3 +235,4 @@ def publish_course(
     db.commit()
     db.refresh(course)
     return course
+

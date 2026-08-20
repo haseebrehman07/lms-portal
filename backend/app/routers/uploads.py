@@ -162,3 +162,44 @@ async def upload_assignment_file_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="File upload failed. Please try again."
         )
+# Add this to app/routers/uploads.py, alongside the existing
+# /uploads/thumbnail endpoint. Reuses the same image-upload pattern.
+
+    # Add this to app/routers/uploads.py, alongside the existing
+# /uploads/thumbnail endpoint. Reuses the same image-upload pattern.
+
+@router.post("/certificate-template")
+async def upload_certificate_template_file(
+    file: UploadFile = File(...),
+    admin=Depends(require_admin)
+):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Allowed: JPEG, PNG, WebP"
+        )
+
+    content = await file.read()
+
+    if len(content) > MAX_IMAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image must be under 5MB"
+        )
+
+    try:
+        # Reuses the same R2 upload helper as thumbnails - a template
+        # image is just another image asset, same storage path pattern.
+        url = upload_thumbnail(content, file.filename, file.content_type)
+        return {
+            "url": url,
+            "filename": file.filename,
+            "size_mb": round(len(content) / 1024 / 1024, 2),
+            "type": "certificate_template"
+        }
+    except Exception as e:
+        logger.error(f"Certificate template upload error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Template upload failed. Please try again."
+        )

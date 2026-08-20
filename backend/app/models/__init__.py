@@ -1,7 +1,7 @@
 from app.models.user import User
 from app.models.category import Category
 from app.models.course import Course
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.enrollment import Enrollment, LessonProgress
 from app.models.enrollment_request import EnrollmentRequest
 from app.models.quiz import Quiz, QuizQuestion, QuizAttempt
@@ -9,6 +9,9 @@ from app.models.assignment import Assignment, AssignmentSubmission
 from app.models.certificate import Certificate
 from app.models.announcement import Announcement
 from app.models.token_blacklist import TokenBlacklist
+from app.models.class_cancellation import ClassCancellation
+from app.models.chat import ChatGroup, GroupMember, ChatMessage
+from app.models.fees import FeeStructure, FeeVoucher
 
 __all__ = [
     "User",
@@ -25,5 +28,11 @@ __all__ = [
     "AssignmentSubmission",
     "Certificate",
     "Announcement",
-    "TokenBlacklist"
+    "TokenBlacklist",
+    "ClassCancellation",
+    "ChatGroup",
+    "GroupMember",
+    "ChatMessage",
+    "FeeStructure",
+    "FeeVoucher"
 ]

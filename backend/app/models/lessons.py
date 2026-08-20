@@ -56,6 +56,7 @@ class Lesson(Base):
     )
     order_index = Column(Integer, nullable=False, default=0)
     video_url = Column(String(500), nullable=True)
+    thumbnail_url = Column(String(500), nullable=True) 
     pdf_url = Column(String(500), nullable=True)
     duration_seconds = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=True)

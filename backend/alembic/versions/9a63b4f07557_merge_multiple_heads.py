@@ -1,0 +1,28 @@
+"""Merge multiple heads
+
+Revision ID: 9a63b4f07557
+Revises: 4167d469882f, 9c5ff84f22e2
+Create Date: 2026-07-28 13:33:47.985755
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '9a63b4f07557'
+down_revision: Union[str, Sequence[str], None] = ('4167d469882f', '9c5ff84f22e2')
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    pass
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    pass

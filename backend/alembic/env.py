@@ -13,13 +13,15 @@ from app.models.course import Course  # noqa
 from app.models.category import Category  # noqa
 from app.models.enrollment import Enrollment, LessonProgress  # noqa
 from app.models.enrollment_request import EnrollmentRequest  # noqa
-from app.models.lesson import Lesson  # noqa
+from app.models.lessons import Lesson  # noqa
 from app.models.Module import Module  # noqa
 from app.models.quiz import Quiz  # noqa
 from app.models.assignment import Assignment  # noqa
 from app.models.announcement import Announcement  # noqa
 from app.models.certificate import Certificate  # noqa
 from app.models.token_blacklist import TokenBlacklist  # noqa
+from app.models.certificate_request import CertificateRequest  # noqa
+from app.models.Attendence import Attendance 
 
 # this is the Alembic Config object, which provides access to values
 # within the .ini file in use.

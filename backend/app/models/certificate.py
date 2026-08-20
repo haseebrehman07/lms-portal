@@ -27,6 +27,12 @@ class Certificate(Base):
         nullable=False,
         index=True
     )
+    # Human-readable, publicly-shown ID printed on the certificate and
+    # used in the QR verification URL - e.g. "CHRPE-2026-062".
+    # Different from `id` (the internal UUID primary key).
+    certificate_number = Column(
+        String(50), unique=True, nullable=False, index=True
+    )
     certificate_url = Column(String(500), nullable=True)
     issued_at = Column(
         DateTime(timezone=True),
@@ -38,4 +44,4 @@ class Certificate(Base):
     course = relationship("Course", back_populates="certificates")
 
     def __repr__(self):
-        return f"<Certificate user={self.user_id} course={self.course_id}>"
+        return f"<Certificate {self.certificate_number} user={self.user_id} course={self.course_id}>"

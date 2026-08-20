@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 from app.database import get_db
 from app.models.quiz import Quiz, QuizQuestion, QuizAttempt
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.enrollment import Enrollment
 from app.models.user import RoleEnum
 from app.schemas.quiz import (

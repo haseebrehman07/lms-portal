@@ -5,7 +5,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from app.database import get_db
-from app.models.lesson import Lesson
+from app.models.lessons import Lesson
 from app.models.assignment import Assignment, AssignmentSubmission, SubmissionStatusEnum
 from app.models.enrollment import Enrollment
 from app.models.user import RoleEnum
