@@ -117,7 +117,7 @@ const AdminFeesTab = () => {
                 <thead className="bg-gray-50 border-b border-gray-100 text-gray-600">
                   <tr>
                     <th className="px-6 py-4 font-semibold">Student</th>
-                    <th className="px-6 py-4 font-semibold">Semester</th>
+                    <th className="px-6 py-4 font-semibold">Course/Semester</th>
                     <th className="px-6 py-4 font-semibold">Expected Amount</th>
                     <th className="px-6 py-4 font-semibold">Receipt</th>
                     <th className="px-6 py-4 font-semibold text-right">Actions</th>
@@ -161,8 +161,6 @@ const AdminFeesTab = () => {
               </table>
             </div>
           </div>
-
-          {/* Past Vouchers Table could go here */}
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -171,20 +169,38 @@ const AdminFeesTab = () => {
               <thead className="bg-gray-50 border-b border-gray-100 text-gray-600">
                 <tr>
                   <th className="px-6 py-4 font-semibold">Student ID</th>
-                  <th className="px-6 py-4 font-semibold">Semester</th>
-                  <th className="px-6 py-4 font-semibold">Total Assigned Fee</th>
+                  <th className="px-6 py-4 font-semibold">Course/Semester</th>
+                  <th className="px-6 py-4 font-semibold">Total Assigned</th>
+                  <th className="px-6 py-4 font-semibold">Total Paid</th>
+                  <th className="px-6 py-4 font-semibold">Remaining</th>
                   <th className="px-6 py-4 font-semibold">Due Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {structures.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-mono text-gray-500">{s.student_id.split('-')[0]}...</td>
-                    <td className="px-6 py-4 font-medium text-gray-900">{s.semester}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">Rs. {s.total_amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-gray-500">{s.due_date ? new Date(s.due_date).toLocaleDateString() : 'N/A'}</td>
-                  </tr>
-                ))}
+                {structures.map((s) => {
+                  // Calculate total paid for this specific fee structure
+                  const totalPaid = vouchers
+                    .filter(v => v.fee_structure_id === s.id && v.status === 'approved')
+                    .reduce((sum, v) => sum + (v.amount_approved || 0), 0);
+                  
+                  const remainingBalance = Math.max(s.total_amount - totalPaid, 0);
+
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 font-mono text-gray-500">{s.student_id.split('-')[0]}...</td>
+                      <td className="px-6 py-4 font-medium text-gray-900">{s.semester}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">Rs. {s.total_amount.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-bold text-emerald-600">Rs. {totalPaid.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-bold text-orange-600">Rs. {remainingBalance.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-500">
+                        {s.due_date ? new Date(s.due_date).toLocaleDateString() : 'N/A'}
+                        {remainingBalance > 0 && s.due_date && new Date(s.due_date) < new Date() && (
+                           <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded uppercase">Overdue</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -210,8 +226,8 @@ const AdminFeesTab = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Semester Name</label>
-                <input type="text" required placeholder="e.g., Fall 2026" value={newStructure.semester} onChange={(e) => setNewStructure({...newStructure, semester: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Course Name / Semester</label>
+                <input type="text" required placeholder="e.g., CHRMP, CHRPE" value={newStructure.semester} onChange={(e) => setNewStructure({...newStructure, semester: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 outline-none focus:border-blue-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Total Fee Amount (Rs.)</label>
